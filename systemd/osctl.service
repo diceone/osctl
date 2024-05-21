@@ -1,0 +1,17 @@
+[Unit]
+Description=osctl API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/osctl
+ExecStart=/root/osctl api
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=osctl
+
+[Install]
+WantedBy=multi-user.target
