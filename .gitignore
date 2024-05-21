@@ -1,0 +1,9 @@
+# Binaries
+osctl
+
+# OS generated files
+*.DS_Store
+*.log
+
+# Dependency directories
+vendor/
