@@ -30,14 +30,14 @@ Follow these steps to build and run the Go program:
 1. **Clone the repository** (if you haven't already):
 
    ```bash
-   git clone https://github.com/yourusername/osctl.git
+   git clone https://github.com/diceone/osctl.git
    cd osctl
    ```
 
 2. **Initialize Go modules** (if not already initialized):
 
    ```bash
-   go mod init github.com/yourusername/osctl
+   go mod init github.com/diceone/osctl
    ```
 
 3. **Download dependencies**:
