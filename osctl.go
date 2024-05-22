@@ -1,10 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +19,11 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 	"github.com/vishvananda/netlink"
+)
+
+var (
+	username string
+	password string
 )
 
 func getRamUsage() string {
@@ -281,7 +287,37 @@ func checkNetworkConnectivity() string {
 	return string(out)
 }
 
+func checkAuth(r *http.Request) bool {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return false
+	}
+
+	const prefix = "Basic "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return false
+	}
+
+	payload, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):])
+	if err != nil {
+		return false
+	}
+
+	pair := strings.SplitN(string(payload), ":", 2)
+	if len(pair) != 2 {
+		return false
+	}
+
+	return pair[0] == username && pair[1] == password
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
+	if !checkAuth(r) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	path := r.URL.Path[1:]
 
 	var result string
@@ -377,6 +413,7 @@ Commands:
   selinux_status       Check SELinux status (sestatus)
   network_connectivity Check network connectivity (ping -c 4 google.com)
   api                  Run as an API server on port 12000
+                       Usage: osctl api --username [admin] --password [password]
   --help               Show this help message`)
 }
 
@@ -436,6 +473,10 @@ func main() {
 	case "network_connectivity":
 		fmt.Println(checkNetworkConnectivity())
 	case "api":
+		apiCmd := flag.NewFlagSet("api", flag.ExitOnError)
+		apiCmd.StringVar(&username, "username", "admin", "API admin username")
+		apiCmd.StringVar(&password, "password", "password", "API admin password")
+		apiCmd.Parse(os.Args[2:])
 		runAPI()
 	default:
 		fmt.Println("Unknown command")
