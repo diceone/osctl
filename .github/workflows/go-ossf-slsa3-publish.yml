@@ -36,3 +36,5 @@ jobs:
       #     Optional: For more options, see https://github.com/slsa-framework/slsa-github-generator#golang-projects
       # =============================================================================================================
 
+with:
+  compile-builder: true
