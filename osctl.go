@@ -137,7 +137,7 @@ func shutdownSystem() string {
 }
 
 func rebootSystem() string {
-	cmd := exec.Command("reboot")
+	cmd := exec.Command("shutdown", "-r", "now")
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to reboot the system. Error: %v", err)
@@ -364,7 +364,7 @@ Commands:
   uptime               Show system uptime
   osinfo               Show operating system name and kernel version
   shutdown             Shutdown the system
-  reboot               Reboot the system
+  reboot               Reboot the system (shutdown -r now)
   ip                   Show IP addresses of all interfaces
   firewall             Show active firewalld rules
   update               Update OS packages
