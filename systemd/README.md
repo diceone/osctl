@@ -2,26 +2,6 @@ Certainly! Here's a `systemd` unit file to run the `osctl` API as a service.
 
 ### `osctl.service`
 
-```ini
-[Unit]
-Description=osctl API Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/root/osctl
-ExecStart=/root/osctl api
-Restart=on-failure
-RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=osctl
-
-[Install]
-WantedBy=multi-user.target
-```
-
 ### Instructions to Set Up the `osctl` API Service
 
 1. **Create the `osctl` binary**:
@@ -50,8 +30,8 @@ WantedBy=multi-user.target
    [Service]
    Type=simple
    User=root
-   WorkingDirectory=/root/osctl
-   ExecStart=/root/osctl api
+   WorkingDirectory=/usr/local/bin/osctl
+   ExecStart=/usr/local/bin/osctl api -username admin -password admin
    Restart=on-failure
    RestartSec=10
    StandardOutput=syslog
