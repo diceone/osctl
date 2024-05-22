@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        osctl system administration tool
 
 License:        MIT
-URL:            https://github.com/yourusername/osctl
+URL:            https://github.com/diceone/osctl
 Source0:        %{name}-%{version}.tar.gz
 
 Requires:       systemd
@@ -53,5 +53,5 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
-* Tue May 21 2024 Your Name <youremail@example.com> - 1.0.0-1
+* Tue May 21 2024 MVO- 1.0.0-1
 - Initial package
