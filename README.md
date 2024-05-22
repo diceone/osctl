@@ -22,32 +22,44 @@
 
 ## Usage
 
-### Build and Run Locally
 
-1. **Clone the repository:**
+### Building and Running the Go Program
+
+Follow these steps to build and run the Go program:
+
+1. **Clone the repository** (if you haven't already):
+
    ```bash
    git clone https://github.com/yourusername/osctl.git
    cd osctl
-2. **Build the binary:**
+   ```
+
+2. **Initialize Go modules** (if not already initialized):
+
+   ```bash
+   go mod init github.com/yourusername/osctl
+   ```
+
+3. **Download dependencies**:
+
+   ```bash
+   go mod tidy
+   ```
+
+4. **Build the `osctl` binary**:
+
+   ```bash
    go build -o osctl osctl.go
+   ```
 
-```bash
+5. **Run the tool**:
 
-go build -o osctl osctl.go
-```
-3. **Run the tool:**
+   ```bash
+   ./osctl [command]
+   ```
 
-```bash
+   Replace `[command]` with the command you want to execute, such as `ram`, `disk`, `service`, `top`, etc.
 
-./osctl [command]
-```
-Running as an API Server
-To run osctl as an API server on port 12000:
-
-```bash
-
-./osctl api
-```
 
 API Endpoints
 Show RAM usage:
@@ -144,7 +156,6 @@ List all Docker images:
 
 GET /images
 ```
-
 License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
