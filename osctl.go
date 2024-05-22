@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/shirou/gopsutil/disk"
@@ -151,7 +153,7 @@ func getIPAddresses() string {
 
 	var output strings.Builder
 	for _, link := range links {
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+		addrs, err := netlink.AddrList(link, syscall.AF_UNSPEC)
 		if err != nil {
 			log.Fatalf("Error getting addresses for interface %v: %v", link.Attrs().Name, err)
 		}
@@ -216,6 +218,69 @@ func listDockerImages() string {
 	return string(out)
 }
 
+func checkRouteTable() string {
+	cmd := exec.Command("netstat", "-rnv")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check route table. Error: %v", err)
+	}
+	return string(out)
+}
+
+func checkActiveServices() string {
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "--state=running")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check active services. Error: %v", err)
+	}
+	return string(out)
+}
+
+func checkFailedServices() string {
+	cmd := exec.Command("systemctl", "--failed")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check failed services. Error: %v", err)
+	}
+	return string(out)
+}
+
+func checkZombieProcesses() string {
+	cmd := exec.Command("ps", "aux")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check zombie processes. Error: %v", err)
+	}
+
+	lines := strings.Split(string(out), "\n")
+	var result strings.Builder
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) > 8 && fields[7] == "Z" {
+			result.WriteString(line + "\n")
+		}
+	}
+	return result.String()
+}
+
+func checkSELinuxStatus() string {
+	cmd := exec.Command("sestatus")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check SELinux status. Error: %v", err)
+	}
+	return string(out)
+}
+
+func checkNetworkConnectivity() string {
+	cmd := exec.Command("ping", "-c", "4", "google.com")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to check network connectivity. Error: %v", err)
+	}
+	return string(out)
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[1:]
 
@@ -258,6 +323,18 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = listDockerContainers()
 	case "images":
 		result = listDockerImages()
+	case "route_table":
+		result = checkRouteTable()
+	case "active_services":
+		result = checkActiveServices()
+	case "failed_services":
+		result = checkFailedServices()
+	case "zombie_processes":
+		result = checkZombieProcesses()
+	case "selinux_status":
+		result = checkSELinuxStatus()
+	case "network_connectivity":
+		result = checkNetworkConnectivity()
 	default:
 		http.Error(w, "Unknown command", http.StatusNotFound)
 		return
@@ -277,25 +354,30 @@ func printHelp() {
 	fmt.Println(`Usage: osctl [command]
 
 Commands:
-  ram       Show RAM usage
-  disk      Show disk usage
-  service   Manage system services
-            Usage: osctl service [start|stop|restart|status] [service_name]
-  top       Show top processes by CPU usage
-  errors    Show last 10 errors from the journal
-  users     Show last 20 logged in users
-  uptime    Show system uptime
-  osinfo   
-  osinfo    Show operating system name and kernel version
-  shutdown  Shutdown the system
-  reboot    Reboot the system
-  ip        Show IP addresses of all interfaces
-  firewall  Show active firewalld rules
-  update    Update OS packages
-  containers List all Docker containers
-  images    List all Docker images
-  api       Run as an API server on port 12000
-  --help    Show this help message`)
+  ram                  Show RAM usage
+  disk                 Show disk usage
+  service              Manage system services
+                       Usage: osctl service [start|stop|restart|status] [service_name]
+  top                  Show top processes by CPU usage
+  errors               Show last 10 errors from the journal
+  users                Show last 20 logged in users
+  uptime               Show system uptime
+  osinfo               Show operating system name and kernel version
+  shutdown             Shutdown the system
+  reboot               Reboot the system
+  ip                   Show IP addresses of all interfaces
+  firewall             Show active firewalld rules
+  update               Update OS packages
+  containers           List all Docker containers
+  images               List all Docker images
+  route_table          Check route table (netstat -rnv)
+  active_services      Check active services (systemctl list-units --type=service --state=running)
+  failed_services      Check failed services (systemctl --failed)
+  zombie_processes     Check zombie processes (ps aux | awk '{ if ($8 == "Z") print $0; }')
+  selinux_status       Check SELinux status (sestatus)
+  network_connectivity Check network connectivity (ping -c 4 google.com)
+  api                  Run as an API server on port 12000
+  --help               Show this help message`)
 }
 
 func main() {
@@ -341,6 +423,18 @@ func main() {
 		fmt.Println(listDockerContainers())
 	case "images":
 		fmt.Println(listDockerImages())
+	case "route_table":
+		fmt.Println(checkRouteTable())
+	case "active_services":
+		fmt.Println(checkActiveServices())
+	case "failed_services":
+		fmt.Println(checkFailedServices())
+	case "zombie_processes":
+		fmt.Println(checkZombieProcesses())
+	case "selinux_status":
+		fmt.Println(checkSELinuxStatus())
+	case "network_connectivity":
+		fmt.Println(checkNetworkConnectivity())
 	case "api":
 		runAPI()
 	default:
