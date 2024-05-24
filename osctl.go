@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -296,7 +297,7 @@ func getActiveConnections() string {
 
 	var output strings.Builder
 	for _, conn := range connections {
-		output.WriteString(fmt.Sprintf("Type: %s, Local Address: %s:%d, Remote Address: %s:%d, Status: %s\n",
+		output.WriteString(fmt.Sprintf("Type: %d, Local Address: %s:%d, Remote Address: %s:%d, Status: %s\n",
 			conn.Type, conn.Laddr.IP, conn.Laddr.Port, conn.Raddr.IP, conn.Raddr.Port, conn.Status))
 	}
 
