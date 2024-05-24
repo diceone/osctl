@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,17 +13,44 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 	"github.com/vishvananda/netlink"
 )
 
-var (
-	username string
-	password string
+const (
+	username = "admin"
+	password = "password"
 )
+
+func basicAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		payload, err := base64.StdEncoding.DecodeString(auth[len("Basic "):])
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		pair := strings.SplitN(string(payload), ":", 2)
+		if len(pair) != 2 || pair[0] != username || pair[1] != password {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 func getRamUsage() string {
 	v, err := mem.VirtualMemory()
@@ -143,7 +169,7 @@ func shutdownSystem() string {
 }
 
 func rebootSystem() string {
-	cmd := exec.Command("shutdown", "-r", "now")
+	cmd := exec.Command("reboot")
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to reboot the system. Error: %v", err)
@@ -224,100 +250,106 @@ func listDockerImages() string {
 	return string(out)
 }
 
-func checkRouteTable() string {
-	cmd := exec.Command("netstat", "-rnv")
+func getCpuUsage() string {
+	cpuPercentages, err := cpu.Percent(0, false)
+	if err != nil {
+		log.Fatalf("Error getting CPU usage: %v", err)
+	}
+	return fmt.Sprintf("CPU Usage: %.2f%%", cpuPercentages[0])
+}
+
+func getLoadAverage() string {
+	avg, err := load.Avg()
+	if err != nil {
+		log.Fatalf("Error getting load average: %v", err)
+	}
+	return fmt.Sprintf("Load Average: 1 min: %.2f, 5 min: %.2f, 15 min: %.2f", avg.Load1, avg.Load5, avg.Load15)
+}
+
+func getNetworkStats() string {
+	stats, err := net.IOCounters(true)
+	if err != nil {
+		log.Fatalf("Error getting network stats: %v", err)
+	}
+
+	var output strings.Builder
+	for _, stat := range stats {
+		output.WriteString(fmt.Sprintf("Interface: %s\n", stat.Name))
+		output.WriteString(fmt.Sprintf("  Bytes Sent: %v\n", stat.BytesSent))
+		output.WriteString(fmt.Sprintf("  Bytes Received: %v\n", stat.BytesRecv))
+		output.WriteString(fmt.Sprintf("  Packets Sent: %v\n", stat.PacketsSent))
+		output.WriteString(fmt.Sprintf("  Packets Received: %v\n", stat.PacketsRecv))
+		output.WriteString(fmt.Sprintf("  Errors In: %v\n", stat.Errin))
+		output.WriteString(fmt.Sprintf("  Errors Out: %v\n", stat.Errout))
+		output.WriteString(fmt.Sprintf("  Drops In: %v\n", stat.Dropin))
+		output.WriteString(fmt.Sprintf("  Drops Out: %v\n", stat.Dropout))
+	}
+
+	return output.String()
+}
+
+func getActiveConnections() string {
+	connections, err := net.Connections("all")
+	if err != nil {
+		log.Fatalf("Error getting active connections: %v", err)
+	}
+
+	var output strings.Builder
+	for _, conn := range connections {
+		output.WriteString(fmt.Sprintf("Type: %s, Local Address: %s:%d, Remote Address: %s:%d, Status: %s\n",
+			conn.Type, conn.Laddr.IP, conn.Laddr.Port, conn.Raddr.IP, conn.Raddr.Port, conn.Status))
+	}
+
+	return output.String()
+}
+
+func getMountedFilesystems() string {
+	partitions, err := disk.Partitions(false)
+	if err != nil {
+		log.Fatalf("Error getting mounted filesystems: %v", err)
+	}
+
+	var output strings.Builder
+	for _, partition := range partitions {
+		usage, err := disk.Usage(partition.Mountpoint)
+		if err != nil {
+			log.Fatalf("Error getting usage for partition %s: %v", partition.Mountpoint, err)
+		}
+		output.WriteString(fmt.Sprintf("Mountpoint: %s, Total: %v GB, Used: %v GB, Free: %v GB, Usage: %.2f%%\n",
+			partition.Mountpoint, usage.Total/1024/1024/1024, usage.Used/1024/1024/1024, usage.Free/1024/1024/1024, usage.UsedPercent))
+	}
+
+	return output.String()
+}
+
+func getKernelMessages() string {
+	cmd := exec.Command("dmesg", "-T")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("Failed to check route table. Error: %v", err)
+		return fmt.Sprintf("Failed to get kernel messages. Error: %v", err)
 	}
 	return string(out)
 }
 
-func checkActiveServices() string {
+func getLoggedinUsers() string {
+	cmd := exec.Command("who")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to get logged-in users. Error: %v", err)
+	}
+	return string(out)
+}
+
+func getServiceStatuses() string {
 	cmd := exec.Command("systemctl", "list-units", "--type=service", "--state=running")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("Failed to check active services. Error: %v", err)
+		return fmt.Sprintf("Failed to get service statuses. Error: %v", err)
 	}
 	return string(out)
-}
-
-func checkFailedServices() string {
-	cmd := exec.Command("systemctl", "--failed")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("Failed to check failed services. Error: %v", err)
-	}
-	return string(out)
-}
-
-func checkZombieProcesses() string {
-	cmd := exec.Command("ps", "aux")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("Failed to check zombie processes. Error: %v", err)
-	}
-
-	lines := strings.Split(string(out), "\n")
-	var result strings.Builder
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) > 8 && fields[7] == "Z" {
-			result.WriteString(line + "\n")
-		}
-	}
-	return result.String()
-}
-
-func checkSELinuxStatus() string {
-	cmd := exec.Command("sestatus")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("Failed to check SELinux status. Error: %v", err)
-	}
-	return string(out)
-}
-
-func checkNetworkConnectivity() string {
-	cmd := exec.Command("ping", "-c", "4", "google.com")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("Failed to check network connectivity. Error: %v", err)
-	}
-	return string(out)
-}
-
-func checkAuth(r *http.Request) bool {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return false
-	}
-
-	const prefix = "Basic "
-	if !strings.HasPrefix(authHeader, prefix) {
-		return false
-	}
-
-	payload, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):])
-	if err != nil {
-		return false
-	}
-
-	pair := strings.SplitN(string(payload), ":", 2)
-	if len(pair) != 2 {
-		return false
-	}
-
-	return pair[0] == username && pair[1] == password
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {
-	if !checkAuth(r) {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	path := r.URL.Path[1:]
 
 	var result string
@@ -359,18 +391,22 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = listDockerContainers()
 	case "images":
 		result = listDockerImages()
-	case "route_table":
-		result = checkRouteTable()
-	case "active_services":
-		result = checkActiveServices()
-	case "failed_services":
-		result = checkFailedServices()
-	case "zombie_processes":
-		result = checkZombieProcesses()
-	case "selinux_status":
-		result = checkSELinuxStatus()
-	case "network_connectivity":
-		result = checkNetworkConnectivity()
+	case "cpu":
+		result = getCpuUsage()
+	case "load":
+		result = getLoadAverage()
+	case "network":
+		result = getNetworkStats()
+	case "connections":
+		result = getActiveConnections()
+	case "filesystems":
+		result = getMountedFilesystems()
+	case "dmesg":
+		result = getKernelMessages()
+	case "who":
+		result = getLoggedinUsers()
+	case "services":
+		result = getServiceStatuses()
 	default:
 		http.Error(w, "Unknown command", http.StatusNotFound)
 		return
@@ -390,31 +426,32 @@ func printHelp() {
 	fmt.Println(`Usage: osctl [command]
 
 Commands:
-  ram                  Show RAM usage
-  disk                 Show disk usage
-  service              Manage system services
-                       Usage: osctl service [start|stop|restart|status] [service_name]
-  top                  Show top processes by CPU usage
-  errors               Show last 10 errors from the journal
-  users                Show last 20 logged in users
-  uptime               Show system uptime
-  osinfo               Show operating system name and kernel version
-  shutdown             Shutdown the system
-  reboot               Reboot the system (shutdown -r now)
-  ip                   Show IP addresses of all interfaces
-  firewall             Show active firewalld rules
-  update               Update OS packages
-  containers           List all Docker containers
-  images               List all Docker images
-  route_table          Check route table (netstat -rnv)
-  active_services      Check active services (systemctl list-units --type=service --state=running)
-  failed_services      Check failed services (systemctl --failed)
-  zombie_processes     Check zombie processes (ps aux | awk '{ if ($8 == "Z") print $0; }')
-  selinux_status       Check SELinux status (sestatus)
-  network_connectivity Check network connectivity (ping -c 4 google.com)
-  api                  Run as an API server on port 12000
-                       Usage: osctl api --username [admin] --password [password]
-  --help               Show this help message`)
+  ram          Show RAM usage
+  disk         Show disk usage
+  service      Manage system services
+               Usage: osctl service [start|stop|restart|status] [service_name]
+  top          Show top processes by CPU usage
+  errors       Show last 10 errors from the journal
+  users        Show last 20 logged in users
+  uptime       Show system uptime
+  osinfo       Show operating system name and kernel version
+  shutdown     Shutdown the system
+  reboot       Reboot the system
+  ip           Show IP addresses of all interfaces
+  firewall     Show active firewalld rules
+  update       Update OS packages
+  containers   List all Docker containers
+  images       List all Docker images
+  cpu          Show CPU usage
+  load         Show system load averages
+  network      Show network statistics
+  connections  List all active network connections
+  filesystems  List all mounted filesystems
+  dmesg        Show kernel messages
+  who          List all currently logged in users
+  services     Show status of all running services
+  api          Run as an API server on port 12000
+  --help       Show this help message`)
 }
 
 func main() {
@@ -460,23 +497,23 @@ func main() {
 		fmt.Println(listDockerContainers())
 	case "images":
 		fmt.Println(listDockerImages())
-	case "route_table":
-		fmt.Println(checkRouteTable())
-	case "active_services":
-		fmt.Println(checkActiveServices())
-	case "failed_services":
-		fmt.Println(checkFailedServices())
-	case "zombie_processes":
-		fmt.Println(checkZombieProcesses())
-	case "selinux_status":
-		fmt.Println(checkSELinuxStatus())
-	case "network_connectivity":
-		fmt.Println(checkNetworkConnectivity())
+	case "cpu":
+		fmt.Println(getCpuUsage())
+	case "load":
+		fmt.Println(getLoadAverage())
+	case "network":
+		fmt.Println(getNetworkStats())
+	case "connections":
+		fmt.Println(getActiveConnections())
+	case "filesystems":
+		fmt.Println(getMountedFilesystems())
+	case "dmesg":
+		fmt.Println(getKernelMessages())
+	case "who":
+		fmt.Println(getLoggedinUsers())
+	case "services":
+		fmt.Println(getServiceStatuses())
 	case "api":
-		apiCmd := flag.NewFlagSet("api", flag.ExitOnError)
-		apiCmd.StringVar(&username, "username", "admin", "API admin username")
-		apiCmd.StringVar(&password, "password", "password", "API admin password")
-		apiCmd.Parse(os.Args[2:])
 		runAPI()
 	default:
 		fmt.Println("Unknown command")
