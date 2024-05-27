@@ -5,9 +5,9 @@ name: Go
 
 on:
   push:
-    branches: [ "metrics" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "metrics" ]
+    branches: [ "main" ]
 
 jobs:
 
