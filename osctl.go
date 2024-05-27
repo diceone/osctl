@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
@@ -27,6 +29,36 @@ const (
 	username = "admin"
 	password = "password"
 )
+
+// Prometheus metrics
+var (
+	ramUsage = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_ram_usage_bytes",
+			Help: "RAM usage in bytes",
+		},
+		[]string{"type"},
+	)
+	diskUsage = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_disk_usage_bytes",
+			Help: "Disk usage in bytes",
+		},
+		[]string{"type"},
+	)
+	cpuUsage = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "osctl_cpu_usage_percent",
+			Help: "CPU usage in percent",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(ramUsage)
+	prometheus.MustRegister(diskUsage)
+	prometheus.MustRegister(cpuUsage)
+}
 
 func basicAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +90,10 @@ func getRamUsage() string {
 		log.Fatalf("Error getting RAM usage: %v", err)
 	}
 
+	ramUsage.WithLabelValues("total").Set(float64(v.Total))
+	ramUsage.WithLabelValues("used").Set(float64(v.Used))
+	ramUsage.WithLabelValues("free").Set(float64(v.Available))
+
 	return fmt.Sprintf("Total: %v MB, Used: %v MB, Free: %v MB",
 		v.Total/1024/1024, v.Used/1024/1024, v.Available/1024/1024)
 }
@@ -67,6 +103,10 @@ func getDiskUsage() string {
 	if err != nil {
 		log.Fatalf("Error getting disk usage: %v", err)
 	}
+
+	diskUsage.WithLabelValues("total").Set(float64(d.Total))
+	diskUsage.WithLabelValues("used").Set(float64(d.Used))
+	diskUsage.WithLabelValues("free").Set(float64(d.Free))
 
 	return fmt.Sprintf("Total: %v GB, Used: %v GB, Free: %v GB",
 		d.Total/1024/1024/1024, d.Used/1024/1024/1024, d.Free/1024/1024/1024)
@@ -255,6 +295,7 @@ func getCpuUsage() string {
 	if err != nil {
 		log.Fatalf("Error getting CPU usage: %v", err)
 	}
+	cpuUsage.Set(cpuPercentages[0])
 	return fmt.Sprintf("CPU Usage: %.2f%%", cpuPercentages[0])
 }
 
@@ -418,6 +459,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 func runAPI() {
 	http.HandleFunc("/", handleRequest)
+	http.Handle("/metrics", promhttp.Handler())
 	fmt.Println("Server is listening on port 12000...")
 	log.Fatal(http.ListenAndServe(":12000", nil))
 }
