@@ -1,0 +1,61 @@
+name: Build and Publish osctl
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger workflow on new version tags
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18
+
+    - name: Build the binary
+      run: |
+        go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: osctl
+        path: osctl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download binary
+      uses: actions/download-artifact@v2
+      with:
+        name: osctl
+        path: ./dist
+
+    - name: Create release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/osctl
+        asset_name: osctl
+        asset_content_type: application/octet-stream
