@@ -1,106 +1,48 @@
 # osctl
 
-`osctl` is a command-line tool for Linux system administration. It provides various commands to monitor and manage the system, including checking RAM and disk usage, managing services, viewing top processes, checking system logs, and more. Additionally, `osctl` can run as an API server to provide system information through HTTP endpoints.
+`osctl` is a command-line interface (CLI) tool for administrating Linux operating systems like RHEL, Ubuntu, and SUSE. It provides easy access to system statistics like RAM usage, disk usage, service management, and more. Additionally, it can run as an API server with a Prometheus metrics endpoint.
 
 ## Features
 
-- Check RAM and disk usage
+- Show RAM usage
+- Show disk usage
 - Manage system services
-- View top processes by CPU usage
-- Check system logs
-- List last logged-in users
+- Show top processes by CPU usage
+- Show the last 10 errors from the journal
+- Show the last 20 logged-in users
 - Show system uptime
-- Retrieve OS and kernel information
-- Shutdown and reboot the system
-- List IP addresses of all interfaces
+- Show operating system name and kernel version
+- Shutdown the system
+- Reboot the system
+- Show IP addresses of all interfaces
 - Show active firewalld rules
 - Update OS packages
-- List Docker containers and images
+- List all Docker containers
+- List all Docker images
 - Show CPU usage
 - Show system load averages
 - Show network statistics
-- List active network connections
-- List mounted filesystems
-- Retrieve kernel messages
-- List currently logged-in users
+- List all active network connections
+- List all mounted filesystems
+- Show kernel messages
+- List all currently logged-in users
 - Show status of all running services
-- Run as an API server
-
-## Installation
-
-### Prerequisites
-
-- Go (version 1.16 or higher)
-- Docker (optional, for Docker-related commands)
-- Systemd (for service management)
-
-### Building from Source
-
-1. Clone the repository:
-
-    ```bash
-    git clone https://github.com/yourusername/osctl.git
-    cd osctl
-    ```
-
-2. Build the binary:
-
-    ```bash
-    go build -o osctl osctl.go
-    ```
-
-3. (Optional) Install the binary to `/usr/local/bin`:
-
-    ```bash
-    sudo mv osctl /usr/local/bin/
-    ```
-
-### Running as a Service
-
-1. Create a systemd service unit file (`/etc/systemd/system/osctl.service`):
-
-    ```ini
-    [Unit]
-    Description=osctl API server
-    After=network.target
-
-    [Service]
-    ExecStart=/usr/local/bin/osctl api
-    Restart=always
-    User=nobody
-    Group=nogroup
-
-    [Install]
-    WantedBy=multi-user.target
-    ```
-
-2. Reload systemd and start the service:
-
-    ```bash
-    sudo systemctl daemon-reload
-    sudo systemctl start osctl
-    sudo systemctl enable osctl
-    ```
+- Run as an API server on port 12000 with a Prometheus metrics endpoint
 
 ## Usage
-
-### Command-Line Interface
-
-Run `osctl` with one of the following commands:
 
 ```bash
 osctl [command]
 ```
 
-Available commands:
+### Commands
 
 - `ram`: Show RAM usage
 - `disk`: Show disk usage
-- `service`: Manage system services
-  - Usage: `osctl service [start|stop|restart|status] [service_name]`
+- `service [start|stop|restart|status] [service_name]`: Manage system services
 - `top`: Show top processes by CPU usage
-- `errors`: Show last 10 errors from the journal
-- `users`: Show last 20 logged-in users
+- `errors`: Show the last 10 errors from the journal
+- `users`: Show the last 20 logged-in users
 - `uptime`: Show system uptime
 - `osinfo`: Show operating system name and kernel version
 - `shutdown`: Shutdown the system
@@ -121,177 +63,88 @@ Available commands:
 - `api`: Run as an API server on port 12000
 - `--help`: Show this help message
 
-### Examples
+## Installation
 
-Check RAM usage:
+### Building from Source
+
+1. Ensure you have Go 1.18 or later installed.
+2. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/osctl.git
+   cd osctl
+   ```
+
+3. Build the binary:
+
+   ```bash
+   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go
+   ```
+
+4. Run the `osctl` binary:
+
+   ```bash
+   ./osctl --help
+   ```
+
+## Running as an API Server
+
+To run `osctl` as an API server on port 12000, use the `api` command:
 
 ```bash
-osctl ram
+./osctl api
 ```
 
-Check disk usage:
+The API server provides the same functionalities as the CLI commands. Additionally, it includes a Prometheus metrics endpoint at `/metrics`.
+
+## Authentication for API
+
+Basic authentication is used for the API server. The default credentials are:
+
+- Username: `admin`
+- Password: `password`
+
+You can modify these credentials in the `auth.go` file.
+
+## Example Usage
+
+Show RAM usage:
 
 ```bash
-osctl disk
+./osctl ram
+```
+
+Show disk usage:
+
+```bash
+./osctl disk
 ```
 
 Start a service:
 
 ```bash
-osctl service start nginx
+./osctl service start apache2
 ```
 
-Stop a service:
+Show top processes by CPU usage:
 
 ```bash
-osctl service stop nginx
-```
-
-List top processes by CPU usage:
-
-```bash
-osctl top
-```
-
-Show last 10 journal errors:
-
-```bash
-osctl errors
-```
-
-Show last 20 logged-in users:
-
-```bash
-osctl users
-```
-
-Show system uptime:
-
-```bash
-osctl uptime
-```
-
-Show OS and kernel information:
-
-```bash
-osctl osinfo
-```
-
-Shutdown the system:
-
-```bash
-osctl shutdown
-```
-
-Reboot the system:
-
-```bash
-osctl reboot
-```
-
-Show IP addresses of all interfaces:
-
-```bash
-osctl ip
-```
-
-Show active firewalld rules:
-
-```bash
-osctl firewall
+./osctl top
 ```
 
 Update OS packages:
 
 ```bash
-osctl update
+./osctl update
 ```
 
-List Docker containers:
+## Contributing
 
-```bash
-osctl containers
+Feel free to submit issues, fork the repository, and send pull requests. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 ```
 
-List Docker images:
-
-```bash
-osctl images
-```
-
-Show CPU usage:
-
-```bash
-osctl cpu
-```
-
-Show system load averages:
-
-```bash
-osctl load
-```
-
-Show network statistics:
-
-```bash
-osctl network
-```
-
-List active network connections:
-
-```bash
-osctl connections
-```
-
-List mounted filesystems:
-
-```bash
-osctl filesystems
-```
-
-Show kernel messages:
-
-```bash
-osctl dmesg
-```
-
-List currently logged-in users:
-
-```bash
-osctl who
-```
-
-Show status of all running services:
-
-```bash
-osctl services
-```
-
-### Running as an API Server
-
-Start the API server on port 12000:
-
-```bash
-osctl api
-```
-
-You can then access the endpoints using HTTP requests. For example, to get RAM usage:
-
-```bash
-curl -u admin:password http://localhost:12000/ram
-```
-
-### License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-### Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request on GitHub.
-
-### Author
-
-Michael Vogeler (diceone)
-```
-
-This README includes an overview of the project, installation and usage instructions, and a list of all available commands with examples. Adjust the author information and repository URL as needed.
+This `README.md` provides a comprehensive overview of the `osctl` project, including installation instructions, usage examples, and available commands. Adjust the repository URL in the clone command to your actual GitHub repository URL.
