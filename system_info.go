@@ -13,6 +13,7 @@ import (
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
+	"github.com/shirou/gopsutil/process"
 )
 
 func getRamUsage() string {
@@ -166,4 +167,48 @@ func getOSInfo() string {
 		log.Fatalf("Error getting OS info: %v", err)
 	}
 	return fmt.Sprintf("OS: %s %s\nKernel: %s", info.Platform, info.PlatformVersion, info.KernelVersion)
+}
+
+func getTopProcesses() string {
+	procs, err := process.Processes()
+	if err != nil {
+		log.Fatalf("Error getting processes: %v", err)
+	}
+
+	type procInfo struct {
+		PID   int32
+		Name  string
+		CPU   float64
+		Mem   float32
+	}
+
+	var procList []procInfo
+	for _, p := range procs {
+		name, err := p.Name()
+		if err != nil {
+			continue
+		}
+		cpu, err := p.CPUPercent()
+		if err != nil {
+			continue
+		}
+		mem, err := p.MemoryPercent()
+		if err != nil {
+			continue
+		}
+		procList = append(procList, procInfo{PID: p.Pid, Name: name, CPU: cpu, Mem: mem})
+	}
+
+	sort.Slice(procList, func(i, j int) bool {
+		return procList[i].CPU > procList[j].CPU
+	})
+
+	output := "PID\tName\t\tCPU%\tMemory%\n"
+	for i, p := range procList {
+		if i >= 10 {
+			break
+		}
+		output += fmt.Sprintf("%d\t%s\t\t%.2f\t%.2f\n", p.PID, p.Name, p.CPU, p.Mem)
+	}
+	return output
 }
