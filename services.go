@@ -110,3 +110,12 @@ func getFirewalldRules() string {
 	}
 	return string(out)
 }
+
+func getServiceStatuses() string {
+	cmd := exec.Command("systemctl", "list-units", "--type=service", "--state=running")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to get service statuses. Error: %v", err)
+	}
+	return string(out)
+}
