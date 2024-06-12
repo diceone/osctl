@@ -146,5 +146,3 @@ Feel free to submit issues, fork the repository, and send pull requests. For maj
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 ```
-
-This `README.md` provides a comprehensive overview of the `osctl` project, including installation instructions, usage examples, and available commands. Adjust the repository URL in the clone command to your actual GitHub repository URL.
