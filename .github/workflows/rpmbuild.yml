@@ -7,35 +7,17 @@ on:
 name: Create RPM Release
 
 jobs:
-    build:
-        name: Create RPM Release
+    package_rpm:
         runs-on: ubuntu-latest
-
         steps:
+        - uses: actions/checkout@v2
 
-        - name: Checkout code
-          uses: actions/checkout@master
-
-        - name: Create Release
-          id: create_release
-          uses: actions/create-release@latest
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        - name: Package RPM and SRPM
+          uses: xmidt-org/rpm-package-action@v1
           with:
-              tag_name: ${{ github.ref }}
-              release_name: Release ${{ github.ref }}
-              body: |
-                Changes in this Release
-                - Create RPM
-                - Upload Source RPM
-              draft: false
-              prerelease: false
-            
-        - name: build RPM package
-          id: rpm_build
-          uses: naveenrajm7/rpmbuild@centos8
-          with:
-              spec_file: "systemd/osctl.spec"
+            path: systemd/
+            spec: osctl.spec
+            distro: rocky-8
             
         - name: Upload Release Asset
           id: upload-release-asset 
