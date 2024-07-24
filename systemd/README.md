@@ -30,7 +30,7 @@ Certainly! Here's a `systemd` unit file to run the `osctl` API as a service.
    [Service]
    Type=simple
    User=root
-   WorkingDirectory=/usr/local/bin/osctl
+   WorkingDirectory=/usr/local/bin/
    ExecStart=/usr/local/bin/osctl api -username admin -password admin
    Restart=on-failure
    RestartSec=10
