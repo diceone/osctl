@@ -26,7 +26,7 @@ jobs:
         go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go
 
     - name: Archive binary
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: osctl
         path: osctl
@@ -40,7 +40,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Download binary
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v4
       with:
         name: osctl
         path: ./dist
