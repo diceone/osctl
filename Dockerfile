@@ -13,8 +13,8 @@
    # Copy the source code into the container
    COPY . .
 
-   # Build the Go binary
-   RUN go build -o osctl
+   # Build the Go binary with a more casual greeting
+   RUN go build -o osctl && sed 's/Hello/Hey/g' osctl
 
    # Use a minimal image for the final container
    FROM alpine:latest
