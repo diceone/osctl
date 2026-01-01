@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"sort"
 	"strings"
@@ -20,7 +19,7 @@ import (
 func getRamUsage() string {
 	v, err := mem.VirtualMemory()
 	if err != nil {
-		log.Fatalf("Error getting RAM usage: %v", err)
+		return fmt.Sprintf("Error getting RAM usage: %v", err)
 	}
 
 	ramUsage.WithLabelValues("total").Set(float64(v.Total))
@@ -34,7 +33,7 @@ func getRamUsage() string {
 func getDiskUsage() string {
 	d, err := disk.Usage("/")
 	if err != nil {
-		log.Fatalf("Error getting disk usage: %v", err)
+		return fmt.Sprintf("Error getting disk usage: %v", err)
 	}
 
 	diskUsage.WithLabelValues("total").Set(float64(d.Total))
@@ -48,7 +47,7 @@ func getDiskUsage() string {
 func getCpuUsage() string {
 	cpuPercentages, err := cpu.Percent(0, false)
 	if err != nil {
-		log.Fatalf("Error getting CPU usage: %v", err)
+		return fmt.Sprintf("Error getting CPU usage: %v", err)
 	}
 	cpuUsage.Set(cpuPercentages[0])
 	return fmt.Sprintf("CPU Usage: %.2f%%", cpuPercentages[0])
@@ -57,7 +56,7 @@ func getCpuUsage() string {
 func getLoadAverage() string {
 	avg, err := load.Avg()
 	if err != nil {
-		log.Fatalf("Error getting load average: %v", err)
+		return fmt.Sprintf("Error getting load average: %v", err)
 	}
 	return fmt.Sprintf("Load Average: 1 min: %.2f, 5 min: %.2f, 15 min: %.2f", avg.Load1, avg.Load5, avg.Load15)
 }
@@ -65,7 +64,7 @@ func getLoadAverage() string {
 func getNetworkStats() string {
 	stats, err := net.IOCounters(true)
 	if err != nil {
-		log.Fatalf("Error getting network stats: %v", err)
+		return fmt.Sprintf("Error getting network stats: %v", err)
 	}
 
 	var output strings.Builder
@@ -87,7 +86,7 @@ func getNetworkStats() string {
 func getActiveConnections() string {
 	connections, err := net.Connections("all")
 	if err != nil {
-		log.Fatalf("Error getting active connections: %v", err)
+		return fmt.Sprintf("Error getting active connections: %v", err)
 	}
 
 	var output strings.Builder
@@ -102,14 +101,15 @@ func getActiveConnections() string {
 func getMountedFilesystems() string {
 	partitions, err := disk.Partitions(false)
 	if err != nil {
-		log.Fatalf("Error getting mounted filesystems: %v", err)
+		return fmt.Sprintf("Error getting mounted filesystems: %v", err)
 	}
 
 	var output strings.Builder
 	for _, partition := range partitions {
 		usage, err := disk.Usage(partition.Mountpoint)
 		if err != nil {
-			log.Fatalf("Error getting usage for partition %s: %v", partition.Mountpoint, err)
+			output.WriteString(fmt.Sprintf("Error getting usage for partition %s: %v\n", partition.Mountpoint, err))
+			continue
 		}
 		output.WriteString(fmt.Sprintf("Mountpoint: %s, Total: %v GB, Used: %v GB, Free: %v GB, Usage: %.2f%%\n",
 			partition.Mountpoint, usage.Total/1024/1024/1024, usage.Used/1024/1024/1024, usage.Free/1024/1024/1024, usage.UsedPercent))
@@ -157,7 +157,7 @@ func getLastLoggedUsers() string {
 func getUptime() string {
 	uptime, err := host.Uptime()
 	if err != nil {
-		log.Fatalf("Error getting uptime: %v", err)
+		return fmt.Sprintf("Error getting uptime: %v", err)
 	}
 	return fmt.Sprintf("Uptime: %v", time.Duration(uptime)*time.Second)
 }
@@ -165,7 +165,7 @@ func getUptime() string {
 func getOSInfo() string {
 	info, err := host.Info()
 	if err != nil {
-		log.Fatalf("Error getting OS info: %v", err)
+		return fmt.Sprintf("Error getting OS info: %v", err)
 	}
 	return fmt.Sprintf("OS: %s %s\nKernel: %s", info.Platform, info.PlatformVersion, info.KernelVersion)
 }
@@ -173,14 +173,14 @@ func getOSInfo() string {
 func getTopProcesses() string {
 	procs, err := process.Processes()
 	if err != nil {
-		log.Fatalf("Error getting processes: %v", err)
+		return fmt.Sprintf("Error getting processes: %v", err)
 	}
 
 	type procInfo struct {
-		PID   int32
-		Name  string
-		CPU   float64
-		Mem   float32
+		PID  int32
+		Name string
+		CPU  float64
+		Mem  float32
 	}
 
 	var procList []procInfo

@@ -6,7 +6,7 @@
 
 - Show RAM usage
 - Show disk usage
-- Manage system services
+- Manage system services (start, stop, restart, status, enable, disable)
 - Show top processes by CPU usage
 - Show the last 10 errors from the journal
 - Show the last 20 logged-in users
@@ -16,7 +16,7 @@
 - Reboot the system
 - Show IP addresses of all interfaces
 - Show active firewalld rules
-- Update OS packages
+- Update OS packages (RHEL/CentOS/Fedora, Ubuntu/Debian, SUSE/openSUSE)
 - List all Docker containers
 - List all Docker images
 - Show CPU usage
@@ -27,7 +27,7 @@
 - Show kernel messages
 - List all currently logged-in users
 - Show status of all running services
-- Run as an API server on port 12000 with a Prometheus metrics endpoint
+- Run as an API server with configurable port and Prometheus metrics endpoint
 
 ## Usage
 
@@ -39,7 +39,7 @@ osctl [command]
 
 - `ram`: Show RAM usage
 - `disk`: Show disk usage
-- `service [start|stop|restart|status] [service_name]`: Manage system services
+- `service [start|stop|restart|status|enable|disable] [service_name]`: Manage system services
 - `top`: Show top processes by CPU usage
 - `errors`: Show the last 10 errors from the journal
 - `users`: Show the last 20 logged-in users
@@ -60,18 +60,18 @@ osctl [command]
 - `dmesg`: Show kernel messages
 - `who`: List all currently logged-in users
 - `services`: Show status of all running services
-- `api`: Run as an API server on port 12000
+- `api`: Run as an API server (default port: 12000)
 - `--help`: Show this help message
 
 ## Installation
 
 ### Building from Source
 
-1. Ensure you have Go 1.18 or later installed.
+1. Ensure you have Go 1.20 or later installed.
 2. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/osctl.git
+   git clone https://github.com/diceone/osctl.git
    cd osctl
    ```
 
@@ -87,24 +87,75 @@ osctl [command]
    ./osctl --help
    ```
 
+### Running with systemd
+
+For production deployments, you can run `osctl` as a systemd service. See the `systemd/` directory for service files and installation instructions.
+
+Example systemd service configuration:
+```bash
+sudo cp osctl /usr/local/bin/
+sudo cp systemd/osctl.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable osctl
+sudo systemctl start osctl
+```
+
+For detailed instructions, see [systemd/README.md](systemd/README.md).
+
 ## Running as an API Server
 
-To run `osctl` as an API server on port 12000, use the `api` command:
+To run `osctl` as an API server, use the `api` command:
 
 ```bash
 ./osctl api
 ```
 
-The API server provides the same functionalities as the CLI commands. Additionally, it includes a Prometheus metrics endpoint at `/metrics`.
+By default, the API server listens on port 12000. You can customize the port and authentication credentials using environment variables.
+
+### Configuration
+
+Configure the API server using environment variables:
+
+- `OSCTL_PORT`: Server port (default: `12000`)
+- `OSCTL_USERNAME`: Basic auth username (default: `admin`)
+- `OSCTL_PASSWORD`: Basic auth password (default: `password`)
+
+Example:
+```bash
+export OSCTL_PORT=8080
+export OSCTL_USERNAME=myuser
+export OSCTL_PASSWORD=securepassword
+./osctl api
+```
+
+The API server provides the same functionalities as the CLI commands. Additionally, it includes a **public** Prometheus metrics endpoint at `/metrics` (no authentication required).
 
 ## Authentication for API
 
-Basic authentication is used for the API server. The default credentials are:
+The API uses Basic Authentication for all endpoints except `/metrics`. 
 
+**Default credentials:**
 - Username: `admin`
 - Password: `password`
 
-You can modify these credentials in the `auth.go` file.
+**⚠️ Security Warning:** Change the default credentials using environment variables in production environments!
+
+### API Usage Examples
+
+Query RAM usage:
+```bash
+curl -u admin:password http://localhost:12000/ram
+```
+
+Manage a service:
+```bash
+curl -u admin:password "http://localhost:12000/service?action=status&service=nginx"
+```
+
+Access Prometheus metrics (no auth required):
+```bash
+curl http://localhost:12000/metrics
+```
 
 ## Example Usage
 
@@ -137,6 +188,41 @@ Update OS packages:
 ```bash
 ./osctl update
 ```
+
+## Security Considerations
+
+### Production Deployment
+
+When deploying `osctl` in production, follow these security best practices:
+
+1. **Change default credentials**: Always set custom username and password via environment variables
+   ```bash
+   export OSCTL_USERNAME=your_secure_username
+   export OSCTL_PASSWORD=your_secure_password
+   ```
+
+2. **Run as root**: Most system commands require root privileges. The API server should run as root, but consider:
+   - Using a reverse proxy (nginx/Apache) for SSL/TLS termination
+   - Implementing additional authentication layers (OAuth, JWT)
+   - Restricting network access via firewall rules
+
+3. **Metrics endpoint**: The `/metrics` endpoint is public by default for Prometheus scraping. To secure it:
+   - Use firewall rules to restrict access to your Prometheus server
+   - Consider implementing IP whitelisting
+   - Place behind a reverse proxy with authentication
+
+4. **Input validation**: The service management commands include validation to prevent command injection, but always:
+   - Sanitize inputs when integrating with other systems
+   - Monitor logs for suspicious activity
+   - Use restricted service accounts where possible
+
+### Supported Operating Systems
+
+- **RHEL/CentOS/Fedora**: Full support with yum/dnf package management
+- **Ubuntu/Debian**: Full support with apt package management  
+- **SUSE/openSUSE**: Full support with zypper package management
+
+OS detection uses `/etc/os-release` (modern standard) with fallback to legacy detection files.
 
 ## Contributing
 

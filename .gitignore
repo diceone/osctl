@@ -7,3 +7,4 @@ osctl
 
 # Dependency directories
 vendor/
+.aider*

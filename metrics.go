@@ -1,10 +1,13 @@
 package main
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -37,8 +40,19 @@ func init() {
 }
 
 func runAPI() {
-	http.HandleFunc("/", handleRequest)
+	port := os.Getenv("OSCTL_PORT")
+	if port == "" {
+		port = "12000"
+	}
+
+	// Protected endpoints with basic auth
+	http.Handle("/", basicAuth(http.HandlerFunc(handleRequest)))
+
+	// Public metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
-	log.Println("Server is listening on port 12000...")
-	log.Fatal(http.ListenAndServe(":12000", nil))
+
+	addr := fmt.Sprintf(":%s", port)
+	log.Printf("Server is listening on port %s...", port)
+	log.Printf("Metrics endpoint available at http://localhost:%s/metrics", port)
+	log.Fatal(http.ListenAndServe(addr, nil))
 }

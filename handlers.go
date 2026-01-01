@@ -23,6 +23,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Missing action or service parameter", http.StatusBadRequest)
 			return
 		}
+		// Validate service name length
+		if len(service) > 256 {
+			http.Error(w, "Service name too long", http.StatusBadRequest)
+			return
+		}
 		result = manageService(action, service)
 	case "top":
 		result = getTopProcesses()

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -12,6 +11,24 @@ import (
 )
 
 func manageService(action, service string) string {
+	// Validate action
+	validActions := map[string]bool{
+		"start":   true,
+		"stop":    true,
+		"restart": true,
+		"status":  true,
+		"enable":  true,
+		"disable": true,
+	}
+	if !validActions[action] {
+		return fmt.Sprintf("Invalid action '%s'. Valid actions: start, stop, restart, status, enable, disable", action)
+	}
+
+	// Basic validation for service name (prevent command injection)
+	if strings.ContainsAny(service, ";|&$`\n\r") {
+		return "Invalid service name: contains forbidden characters"
+	}
+
 	cmd := exec.Command("systemctl", action, service)
 	err := cmd.Run()
 	if err != nil {
@@ -40,18 +57,34 @@ func rebootSystem() string {
 
 func updatePackages() string {
 	var cmd *exec.Cmd
-	if _, err := os.Stat("/etc/redhat-release"); err == nil {
-		cmd = exec.Command("yum", "update", "-y")
-	} else if _, err := os.Stat("/etc/lsb-release"); err == nil {
-		cmd = exec.Command("apt-get", "update", "-y")
-		cmd.Run()
-		cmd = exec.Command("apt-get", "upgrade", "-y")
-	} else if _, err := os.Stat("/etc/SuSE-release"); err == nil {
-		cmd = exec.Command("zypper", "refresh")
-		cmd.Run()
-		cmd = exec.Command("zypper", "update", "-y")
+
+	// Check for /etc/os-release first (modern standard)
+	if data, err := os.ReadFile("/etc/os-release"); err == nil {
+		osRelease := string(data)
+		if strings.Contains(strings.ToLower(osRelease), "ubuntu") || strings.Contains(strings.ToLower(osRelease), "debian") {
+			cmd = exec.Command("apt-get", "update", "-y")
+			cmd.Run()
+			cmd = exec.Command("apt-get", "upgrade", "-y")
+		} else if strings.Contains(strings.ToLower(osRelease), "rhel") || strings.Contains(strings.ToLower(osRelease), "centos") || strings.Contains(strings.ToLower(osRelease), "fedora") {
+			cmd = exec.Command("yum", "update", "-y")
+		} else if strings.Contains(strings.ToLower(osRelease), "suse") || strings.Contains(strings.ToLower(osRelease), "opensuse") {
+			cmd = exec.Command("zypper", "refresh")
+			cmd.Run()
+			cmd = exec.Command("zypper", "update", "-y")
+		} else {
+			return "Unsupported OS for package update"
+		}
 	} else {
-		return "Unsupported OS for package update"
+		// Fallback to old detection methods
+		if _, err := os.Stat("/etc/redhat-release"); err == nil {
+			cmd = exec.Command("yum", "update", "-y")
+		} else if _, err := os.Stat("/etc/debian_version"); err == nil {
+			cmd = exec.Command("apt-get", "update", "-y")
+			cmd.Run()
+			cmd = exec.Command("apt-get", "upgrade", "-y")
+		} else {
+			return "Unsupported OS for package update"
+		}
 	}
 
 	out, err := cmd.CombinedOutput()
@@ -82,14 +115,15 @@ func listDockerImages() string {
 func getIPAddresses() string {
 	links, err := netlink.LinkList()
 	if err != nil {
-		log.Fatalf("Error getting network interfaces: %v", err)
+		return fmt.Sprintf("Error getting network interfaces: %v", err)
 	}
 
 	var output strings.Builder
 	for _, link := range links {
 		addrs, err := netlink.AddrList(link, syscall.AF_UNSPEC)
 		if err != nil {
-			log.Fatalf("Error getting addresses for interface %v: %v", link.Attrs().Name, err)
+			output.WriteString(fmt.Sprintf("Error getting addresses for interface %v: %v\n", link.Attrs().Name, err))
+			continue
 		}
 		if len(addrs) > 0 {
 			output.WriteString(fmt.Sprintf("Interface %s:\n", link.Attrs().Name))
