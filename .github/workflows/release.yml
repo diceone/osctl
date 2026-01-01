@@ -60,7 +60,7 @@ jobs:
           chmod +x build/osctl-*
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             build/osctl-linux-amd64
