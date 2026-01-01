@@ -32,6 +32,7 @@
 - **Extended metrics** (Network I/O, Disk I/O, Process counts)
 - **Security audit** (port scan, file permissions, SSH config, suspicious files)
 - **Cron job management** (list, add, remove, next runs)
+- **Maintenance mode** (system maintenance operations, service checks, cache clearing)
 - Run as an API server with configurable port and Prometheus metrics endpoint
 
 ## Usage
@@ -87,6 +88,14 @@ osctl [command]
   - `add "<schedule>" "<command>"`: Add new cron job
   - `remove <line>`: Remove cron job by line number
   - `next`: Show next scheduled runs (systemd timers)
+- `maintenance [action]`: Maintenance mode and system operations
+  - `status`: Show maintenance mode status
+  - `enable`: Enable maintenance mode (broadcasts message to users)
+  - `disable`: Disable maintenance mode
+  - `check-services`: Check status of critical services
+  - `restart-failed`: Restart all failed systemd services
+  - `sync-time`: Synchronize system time via NTP
+  - `clear-cache`: Clear system caches and old journal logs
 - `api`: Run as an API server (default port: 12000)
 - `--help`: Show this help message
 
@@ -241,6 +250,18 @@ Manage cron jobs:
 ```bash
 ./osctl cron list
 ./osctl cron add "0 2 * * *" "/backup.sh"
+```
+
+Maintenance operations:
+
+```bash
+./osctl maintenance status
+./osctl maintenance enable
+./osctl maintenance check-services
+./osctl maintenance restart-failed
+./osctl maintenance sync-time
+./osctl maintenance clear-cache
+./osctl maintenance disable
 ```
 
 ## Security Considerations

@@ -166,6 +166,20 @@ func main() {
 		default:
 			fmt.Println("Unknown cron action")
 		}
+	case "maintenance":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: osctl maintenance [status|enable|disable|check-services|restart-failed|sync-time|clear-cache]")
+			fmt.Println("  status            - Show maintenance mode status")
+			fmt.Println("  enable            - Enable maintenance mode")
+			fmt.Println("  disable           - Disable maintenance mode")
+			fmt.Println("  check-services    - Check critical services status")
+			fmt.Println("  restart-failed    - Restart all failed services")
+			fmt.Println("  sync-time         - Synchronize system time")
+			fmt.Println("  clear-cache       - Clear system caches")
+			return
+		}
+		action := os.Args[2]
+		fmt.Println(getMaintenanceActions(action))
 	case "api":
 		runAPI()
 	default:

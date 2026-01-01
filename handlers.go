@@ -159,6 +159,13 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid cron action. Valid: list, add, remove, next", http.StatusBadRequest)
 			return
 		}
+	case "maintenance":
+		action := r.URL.Query().Get("action")
+		if action == "" {
+			http.Error(w, "Missing action parameter. Valid: status, enable, disable, check-services, restart-failed, sync-time, clear-cache", http.StatusBadRequest)
+			return
+		}
+		result = getMaintenanceActions(action)
 	default:
 		http.Error(w, "Unknown command", http.StatusNotFound)
 		return
@@ -203,6 +210,7 @@ Commands:
   procs        Show process count by state
   audit        Security audit (ports, files, permissions, users, ssh, summary)
   cron         Cron job management (list, add, remove, next)
+  maintenance  Maintenance mode and system operations (status, enable, disable, check-services, restart-failed, sync-time, clear-cache)
   api          Run as an API server (default port: 12000)
   --help       Show this help message`)
 }
