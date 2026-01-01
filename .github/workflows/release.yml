@@ -1,67 +1,82 @@
-name: Build and Publish osctl
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'  # Trigger workflow on new version tags
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  build-and-release:
+    name: Build and Release
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download and install Go 1.20
-      run: |
-        wget https://dl.google.com/go/go1.20.5.linux-amd64.tar.gz
-        sudo tar -C /usr/local -xzf go1.20.5.linux-amd64.tar.gz
-        export PATH=$PATH:/usr/local/go/bin
-        go version
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.20'
 
-    - name: Build the binary
-      run: |
-        export PATH=$PATH:/usr/local/go/bin
-        go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go
+      - name: Get dependencies
+        run: |
+          go mod download
+          go mod verify
 
-    - name: Archive binary
-      uses: actions/upload-artifact@v2
-      with:
-        name: osctl
-        path: osctl
+      - name: Build binaries for multiple platforms
+        run: |
+          # Create build directory
+          mkdir -p build
+          
+          # Build for Linux amd64
+          echo "Building for Linux amd64..."
+          GOOS=linux GOARCH=amd64 go build -o build/osctl-linux-amd64 \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            main.go auth.go metrics.go handlers.go system_info.go services.go
+          
+          # Build for Linux arm64
+          echo "Building for Linux arm64..."
+          GOOS=linux GOARCH=arm64 go build -o build/osctl-linux-arm64 \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            main.go auth.go metrics.go handlers.go system_info.go services.go
+          
+          # Build for Linux arm
+          echo "Building for Linux arm..."
+          GOOS=linux GOARCH=arm go build -o build/osctl-linux-arm \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            main.go auth.go metrics.go handlers.go system_info.go services.go
+          
+          # Create checksums
+          cd build
+          sha256sum * > checksums.txt
+          cat checksums.txt
+          cd ..
+          
+          # Make binaries executable
+          chmod +x build/osctl-*
 
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/osctl-linux-amd64
+            build/osctl-linux-arm64
+            build/osctl-linux-arm
+            build/checksums.txt
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Download binary
-      uses: actions/download-artifact@v2
-      with:
-        name: osctl
-        path: ./dist
-
-    - name: Create release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-    - name: Upload release asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/osctl
-        asset_name: osctl
-        asset_content_type: application/octet-stream
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: osctl-binaries
+          path: build/
+          retention-days: 7
