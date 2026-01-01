@@ -36,19 +36,19 @@ jobs:
           echo "Building for Linux amd64..."
           GOOS=linux GOARCH=amd64 go build -o build/osctl-linux-amd64 \
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-            main.go auth.go metrics.go handlers.go system_info.go services.go
+            main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go
           
           # Build for Linux arm64
           echo "Building for Linux arm64..."
           GOOS=linux GOARCH=arm64 go build -o build/osctl-linux-arm64 \
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-            main.go auth.go metrics.go handlers.go system_info.go services.go
+            main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go
           
           # Build for Linux arm
           echo "Building for Linux arm..."
           GOOS=linux GOARCH=arm go build -o build/osctl-linux-arm \
             -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
-            main.go auth.go metrics.go handlers.go system_info.go services.go
+            main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go
           
           # Create checksums
           cd build

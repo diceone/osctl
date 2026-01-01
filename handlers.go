@@ -69,6 +69,96 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = getLoggedinUsers()
 	case "services":
 		result = getServiceStatuses()
+	case "health":
+		result = getHealthCheck()
+	case "process":
+		action := r.URL.Query().Get("action")
+		pid := r.URL.Query().Get("pid")
+		priority := r.URL.Query().Get("priority")
+
+		switch action {
+		case "kill":
+			if pid == "" {
+				http.Error(w, "Missing pid parameter", http.StatusBadRequest)
+				return
+			}
+			result = killProcess(pid)
+		case "killforce":
+			if pid == "" {
+				http.Error(w, "Missing pid parameter", http.StatusBadRequest)
+				return
+			}
+			result = killProcessForce(pid)
+		case "nice":
+			if pid == "" || priority == "" {
+				http.Error(w, "Missing pid or priority parameter", http.StatusBadRequest)
+				return
+			}
+			result = setProcessPriority(pid, priority)
+		case "info":
+			if pid == "" {
+				http.Error(w, "Missing pid parameter", http.StatusBadRequest)
+				return
+			}
+			result = getProcessInfo(pid)
+		case "tree":
+			result = getProcessTree()
+		default:
+			http.Error(w, "Invalid process action. Valid: kill, killforce, nice, info, tree", http.StatusBadRequest)
+			return
+		}
+	case "networkio":
+		result = getNetworkIO()
+	case "diskio":
+		result = getDiskIO()
+	case "procs":
+		result = getProcessCountByState()
+	case "audit":
+		action := r.URL.Query().Get("action")
+		switch action {
+		case "ports":
+			result = getOpenPorts()
+		case "files":
+			result = checkSuspiciousFiles()
+		case "permissions":
+			result = checkFilePermissions()
+		case "users":
+			result = checkUnusedUsers()
+		case "ssh":
+			result = checkSSHSecurity()
+		case "summary":
+			result = getSecurityAuditSummary()
+		default:
+			http.Error(w, "Invalid audit action. Valid: ports, files, permissions, users, ssh, summary", http.StatusBadRequest)
+			return
+		}
+	case "cron":
+		action := r.URL.Query().Get("action")
+		schedule := r.URL.Query().Get("schedule")
+		command := r.URL.Query().Get("command")
+		line := r.URL.Query().Get("line")
+
+		switch action {
+		case "list":
+			result = listCronJobsFormatted()
+		case "add":
+			if schedule == "" || command == "" {
+				http.Error(w, "Missing schedule or command parameter", http.StatusBadRequest)
+				return
+			}
+			result = addCronJob(schedule, command)
+		case "remove":
+			if line == "" {
+				http.Error(w, "Missing line parameter", http.StatusBadRequest)
+				return
+			}
+			result = removeCronJob(line)
+		case "next":
+			result = getCronNextRun()
+		default:
+			http.Error(w, "Invalid cron action. Valid: list, add, remove, next", http.StatusBadRequest)
+			return
+		}
 	default:
 		http.Error(w, "Unknown command", http.StatusNotFound)
 		return
@@ -85,7 +175,7 @@ Commands:
   ram          Show RAM usage
   disk         Show disk usage
   service      Manage system services
-               Usage: osctl service [start|stop|restart|status] [service_name]
+               Usage: osctl service [start|stop|restart|status|enable|disable] [service_name]
   top          Show top processes by CPU usage
   errors       Show last 10 errors from the journal
   users        Show last 20 logged in users
@@ -106,6 +196,13 @@ Commands:
   dmesg        Show kernel messages
   who          List all currently logged in users
   services     Show status of all running services
-  api          Run as an API server on port 12000
+  health       Show health check status
+  process      Process management (kill, nice, info, tree)
+  networkio    Show network I/O statistics
+  diskio       Show disk I/O statistics
+  procs        Show process count by state
+  audit        Security audit (ports, files, permissions, users, ssh, summary)
+  cron         Cron job management (list, add, remove, next)
+  api          Run as an API server (default port: 12000)
   --help       Show this help message`)
 }

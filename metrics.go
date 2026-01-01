@@ -31,12 +31,37 @@ var (
 			Help: "CPU usage in percent",
 		},
 	)
+	// Extended metrics
+	networkIOBytes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_network_io_bytes",
+			Help: "Network I/O in bytes",
+		},
+		[]string{"interface", "direction"},
+	)
+	diskIOBytes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_disk_io_bytes",
+			Help: "Disk I/O in bytes",
+		},
+		[]string{"device", "direction"},
+	)
+	processCount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_process_count",
+			Help: "Number of processes by state",
+		},
+		[]string{"state"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(ramUsage)
 	prometheus.MustRegister(diskUsage)
 	prometheus.MustRegister(cpuUsage)
+	prometheus.MustRegister(networkIOBytes)
+	prometheus.MustRegister(diskIOBytes)
+	prometheus.MustRegister(processCount)
 }
 
 func runAPI() {
