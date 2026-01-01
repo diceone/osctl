@@ -27,6 +27,11 @@
 - Show kernel messages
 - List all currently logged-in users
 - Show status of all running services
+- **Health check endpoint** for monitoring
+- **Process management** (kill, nice, info, tree)
+- **Extended metrics** (Network I/O, Disk I/O, Process counts)
+- **Security audit** (port scan, file permissions, SSH config, suspicious files)
+- **Cron job management** (list, add, remove, next runs)
 - Run as an API server with configurable port and Prometheus metrics endpoint
 
 ## Usage
@@ -60,6 +65,28 @@ osctl [command]
 - `dmesg`: Show kernel messages
 - `who`: List all currently logged-in users
 - `services`: Show status of all running services
+- `health`: Show system health check status
+- `process [action]`: Process management
+  - `kill <pid>`: Terminate process
+  - `killforce <pid>`: Force kill process
+  - `nice <pid> <priority>`: Set process priority (-20 to 19)
+  - `info <pid>`: Show detailed process information
+  - `tree`: Show process tree
+- `networkio`: Show network I/O statistics with rates
+- `diskio`: Show disk I/O statistics
+- `procs`: Show process count by state
+- `audit [action]`: Security audit tools
+  - `ports`: List open listening ports
+  - `files`: Check for suspicious file permissions
+  - `permissions`: Check critical file permissions
+  - `users`: List user accounts and last login
+  - `ssh`: Audit SSH configuration
+  - `summary`: Security audit summary
+- `cron [action]`: Cron job management
+  - `list`: List all cron jobs with line numbers
+  - `add "<schedule>" "<command>"`: Add new cron job
+  - `remove <line>`: Remove cron job by line number
+  - `next`: Show next scheduled runs (systemd timers)
 - `api`: Run as an API server (default port: 12000)
 - `--help`: Show this help message
 
@@ -78,7 +105,7 @@ osctl [command]
 3. Build the binary:
 
    ```bash
-   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go
+   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go
    ```
 
 4. Run the `osctl` binary:
@@ -187,6 +214,33 @@ Update OS packages:
 
 ```bash
 ./osctl update
+```
+
+Check system health:
+
+```bash
+./osctl health
+```
+
+Kill a process:
+
+```bash
+./osctl process kill 1234
+```
+
+Security audit:
+
+```bash
+./osctl audit summary
+./osctl audit ports
+./osctl audit ssh
+```
+
+Manage cron jobs:
+
+```bash
+./osctl cron list
+./osctl cron add "0 2 * * *" "/backup.sh"
 ```
 
 ## Security Considerations
