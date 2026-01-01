@@ -114,7 +114,7 @@ osctl [command]
 3. Build the binary:
 
    ```bash
-   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go
+   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go maintenance.go
    ```
 
 4. Run the `osctl` binary:
