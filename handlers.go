@@ -64,6 +64,75 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = listDockerContainers()
 	case "images":
 		result = listDockerImages()
+	case "dockerlogs":
+		container := r.URL.Query().Get("container")
+		if container == "" {
+			http.Error(w, "Missing container parameter", http.StatusBadRequest)
+			return
+		}
+		result = dockerContainerLogs(container)
+	case "dockerrestart":
+		// Restarting a container is destructive: POST only.
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. dockerrestart requires POST", http.StatusMethodNotAllowed)
+			return
+		}
+		container := r.URL.Query().Get("container")
+		if container == "" {
+			http.Error(w, "Missing container parameter", http.StatusBadRequest)
+			return
+		}
+		result = dockerRestartContainer(container)
+	case "userinfo":
+		user := r.URL.Query().Get("user")
+		if user == "" {
+			http.Error(w, "Missing user parameter", http.StatusBadRequest)
+			return
+		}
+		result = getUserInfo(user)
+	case "useradd":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. useradd requires POST", http.StatusMethodNotAllowed)
+			return
+		}
+		user := r.URL.Query().Get("user")
+		if user == "" {
+			http.Error(w, "Missing user parameter", http.StatusBadRequest)
+			return
+		}
+		result = addUser(user)
+	case "userdel":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. userdel requires POST", http.StatusMethodNotAllowed)
+			return
+		}
+		user := r.URL.Query().Get("user")
+		if user == "" {
+			http.Error(w, "Missing user parameter", http.StatusBadRequest)
+			return
+		}
+		result = deleteUser(user)
+	case "firewallallow":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. firewallallow requires POST", http.StatusMethodNotAllowed)
+			return
+		}
+		result = manageFirewallRule("allow", r.URL.Query().Get("port"))
+	case "firewalldeny":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. firewalldeny requires POST", http.StatusMethodNotAllowed)
+			return
+		}
+		result = manageFirewallRule("deny", r.URL.Query().Get("port"))
+	case "doctor":
+		result = getDoctorReport()
+	case "version":
+		result = getVersion()
 	case "cpu":
 		result = getCpuUsage()
 	case "load":
@@ -216,38 +285,62 @@ func printHelp() {
 	fmt.Println(`Usage: osctl [command]
 
 Commands:
-  ram          Show RAM usage
-  disk         Show disk usage
-  service      Manage system services
-               Usage: osctl service [start|stop|restart|status|enable|disable] [service_name]
-  top          Show top processes by CPU usage
-  errors       Show last 10 errors from the journal
-  users        Show last 20 logged in users
-  uptime       Show system uptime
-  osinfo       Show operating system name and kernel version
-  shutdown     Shutdown the system
-  reboot       Reboot the system
-  ip           Show IP addresses of all interfaces
-  firewall     Show active firewalld rules
-  update       Update OS packages
-  containers   List all Docker containers
-  images       List all Docker images
-  cpu          Show CPU usage
-  load         Show system load averages
-  network      Show network statistics
-  connections  List all active network connections
-  filesystems  List all mounted filesystems
-  dmesg        Show kernel messages
-  who          List all currently logged in users
-  services     Show status of all running services
-  health       Show health check status
-  process      Process management (kill, nice, info, tree)
-  networkio    Show network I/O statistics
-  diskio       Show disk I/O statistics
-  procs        Show process count by state
-  audit        Security audit (ports, files, permissions, users, ssh, summary)
-  cron         Cron job management (list, add, remove, next)
-  maintenance  Maintenance mode and system operations (status, enable, disable, check-services, restart-failed, sync-time, clear-cache)
-  api          Run as an API server (default port: 12000)
-  --help       Show this help message`)
+  ram             Show RAM usage
+  disk            Show disk usage
+  service         Manage system services
+                  Usage: osctl service [start|stop|restart|status|enable|disable] [service_name]
+  top             Show top processes by CPU usage
+  errors          Show last 10 errors from the journal
+  users           Show last 20 logged in users
+  uptime          Show system uptime
+  osinfo          Show operating system name and kernel version
+  shutdown        Shutdown the system
+  reboot          Reboot the system
+  ip              Show IP addresses of all interfaces
+  firewall        Show active firewall rules
+  firewallallow   Allow a port: osctl firewallallow <port>[/<proto>] (ufw or firewalld)
+  firewalldeny    Deny/remove a port rule: osctl firewalldeny <port>[/<proto>]
+  update          Update OS packages
+  containers      List all Docker containers
+  images          List all Docker images
+  dockerlogs      Show last 50 log lines of a container: osctl dockerlogs <container>
+  dockerrestart   Restart a container: osctl dockerrestart <container>
+  userinfo        Show user identity and password aging: osctl userinfo <username>
+  useradd         Create a user with home directory: osctl useradd <username>
+  userdel         Delete a user (and home directory): osctl userdel <username>
+  cpu             Show CPU usage
+  load            Show system load averages
+  network         Show network statistics
+  connections     List all active network connections
+  filesystems     List all mounted filesystems
+  dmesg           Show kernel messages
+  who             List all currently logged in users
+  services        Show status of all running services
+  health          Show health check status
+  doctor          One-shot diagnostic: health, failed services, disk, errors, updates
+  process         Process management (kill, nice, info, tree)
+  networkio       Show network I/O statistics
+  diskio          Show disk I/O statistics
+  procs           Show process count by state
+  audit           Security audit (ports, files, permissions, users, ssh, summary)
+  cron            Cron job management (list, add, remove, next)
+  maintenance     Maintenance mode and system operations (status, enable, disable, check-services, restart-failed, sync-time, clear-cache)
+  api             Run as an API server (default port: 12000)
+  version         Show osctl version
+  --json          Emit any command result as JSON: osctl --json <command>
+  --help          Show this help message
+
+Global options:
+  --json, -j      Print the command result as {"result": "..."} JSON
+
+Environment:
+  OSCTL_CONFIG              Path to a KEY=VALUE config file
+  OSCTL_PORT                API port (default 12000)
+  OSCTL_USERNAME/PASSWORD   Basic auth credentials
+  OSCTL_API_TOKEN           Bearer token alternative for the API
+  OSCTL_TLS_CERT/OSCTL_TLS_KEY  Serve the API over HTTPS
+  OSCTL_AUDIT_LOG           JSONL request audit log path
+  OSCTL_STATE_DIR           Directory for persisted auth-failure state
+  OSCTL_WEBHOOK_URL         POST JSON here when health status changes
+  OSCTL_HEALTH_INTERVAL     Seconds between health checks (default 300, min 30)`)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -144,6 +145,42 @@ func listDockerImages() string {
 		return fmt.Sprintf("Failed to list Docker images. Error: %v", err)
 	}
 	return string(out)
+}
+
+// validContainerName matches Docker container names/IDs.
+var validContainerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+
+func validateContainerName(name string) error {
+	if !validContainerName.MatchString(name) {
+		return fmt.Errorf("invalid container name %q (allowed: letters, digits, '-', '_', '.', max 64 chars)", name)
+	}
+	return nil
+}
+
+// dockerContainerLogs shows the last 50 log lines of a container.
+func dockerContainerLogs(container string) string {
+	if err := validateContainerName(container); err != nil {
+		return "Invalid container name: " + err.Error()
+	}
+
+	out, err := exec.Command("docker", "logs", "--tail", "50", container).CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to get logs for container %s. Error: %v\n%s", container, err, string(out))
+	}
+	return string(out)
+}
+
+// dockerRestartContainer restarts a container.
+func dockerRestartContainer(container string) string {
+	if err := validateContainerName(container); err != nil {
+		return "Invalid container name: " + err.Error()
+	}
+
+	out, err := exec.Command("docker", "restart", container).CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to restart container %s. Error: %v\n%s", container, err, string(out))
+	}
+	return fmt.Sprintf("Container %s restarted.", container)
 }
 
 func getIPAddresses() string {

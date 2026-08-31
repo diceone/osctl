@@ -1,0 +1,358 @@
+openapi: 3.0.3
+info:
+  title: osctl API
+  description: >
+    Linux system administration HTTP API exposed by `osctl api`.
+    Authentication is Basic Auth (OSCTL_USERNAME/OSCTL_PASSWORD) or a Bearer
+    token (OSCTL_API_TOKEN). The /metrics endpoint is public for Prometheus.
+  version: 0.3.0
+servers:
+  - url: http://localhost:12000
+  - url: https://localhost:12000
+
+security:
+  - basicAuth: []
+  - bearerToken: []
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    bearerToken:
+      type: http
+      scheme: bearer
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+    MethodNotAllowed:
+      description: Endpoint requires POST
+
+paths:
+  /ram:
+    get:
+      summary: RAM usage statistics
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /disk:
+    get:
+      summary: Disk usage of the root filesystem
+      responses:
+        "200":
+          description: OK
+  /cpu:
+    get:
+      summary: CPU usage
+      responses:
+        "200":
+          description: OK
+  /load:
+    get:
+      summary: System load averages
+      responses:
+        "200":
+          description: OK
+  /top:
+    get:
+      summary: Top processes by CPU usage
+      responses:
+        "200":
+          description: OK
+  /uptime:
+    get:
+      summary: System uptime
+      responses:
+        "200":
+          description: OK
+  /osinfo:
+    get:
+      summary: OS name and kernel version
+      responses:
+        "200":
+          description: OK
+  /ip:
+    get:
+      summary: IP addresses of all network interfaces
+      responses:
+        "200":
+          description: OK
+  /network:
+    get:
+      summary: Network statistics
+      responses:
+        "200":
+          description: OK
+  /networkio:
+    get:
+      summary: Network I/O statistics
+      responses:
+        "200":
+          description: OK
+  /diskio:
+    get:
+      summary: Disk I/O statistics
+      responses:
+        "200":
+          description: OK
+  /connections:
+    get:
+      summary: Active network connections
+      responses:
+        "200":
+          description: OK
+  /filesystems:
+    get:
+      summary: Mounted filesystems
+      responses:
+        "200":
+          description: OK
+  /procs:
+    get:
+      summary: Process count by state
+      responses:
+        "200":
+          description: OK
+  /services:
+    get:
+      summary: Status of all running services
+      responses:
+        "200":
+          description: OK
+  /errors:
+    get:
+      summary: Last 10 journal errors
+      responses:
+        "200":
+          description: OK
+  /dmesg:
+    get:
+      summary: Kernel messages
+      responses:
+        "200":
+          description: OK
+  /users:
+    get:
+      summary: Last 20 logged in users
+      responses:
+        "200":
+          description: OK
+  /who:
+    get:
+      summary: Currently logged in users
+      responses:
+        "200":
+          description: OK
+  /containers:
+    get:
+      summary: List Docker containers
+      responses:
+        "200":
+          description: OK
+  /images:
+    get:
+      summary: List Docker images
+      responses:
+        "200":
+          description: OK
+  /health:
+    get:
+      summary: Health check status
+      responses:
+        "200":
+          description: OK
+  /doctor:
+    get:
+      summary: One-shot diagnostic report (health, failed services, disk, errors, updates)
+      responses:
+        "200":
+          description: OK
+  /version:
+    get:
+      summary: osctl version
+      responses:
+        "200":
+          description: OK
+  /firewall:
+    get:
+      summary: Active firewall rules
+      responses:
+        "200":
+          description: OK
+  /cron:
+    get:
+      summary: Cron job status
+      responses:
+        "200":
+          description: OK
+  /audit:
+    get:
+      summary: Security audit summary
+      responses:
+        "200":
+          description: OK
+  /maintenance:
+    get:
+      summary: Maintenance mode status
+      responses:
+        "200":
+          description: OK
+
+  /service:
+    get:
+      summary: Manage or query a service
+      description: >
+        action=status shows status; POST via CLI is equivalent. The API endpoint
+        requires both action and service query parameters.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [start, stop, restart, status, enable, disable]
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action executed
+        "400":
+          description: Missing action or service parameter
+
+  /shutdown:
+    post:
+      summary: Shutdown the system
+      responses:
+        "200":
+          description: Shutdown initiated
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /reboot:
+    post:
+      summary: Reboot the system
+      responses:
+        "200":
+          description: Reboot initiated
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /update:
+    post:
+      summary: Update OS packages
+      responses:
+        "200":
+          description: Update started
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /dockerlogs:
+    get:
+      summary: Last 50 log lines of a container
+      parameters:
+        - name: container
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid container name
+  /dockerrestart:
+    post:
+      summary: Restart a Docker container
+      parameters:
+        - name: container
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Container restarted
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /userinfo:
+    get:
+      summary: User identity and password aging
+      parameters:
+        - name: user
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid username
+  /useradd:
+    post:
+      summary: Create a user with home directory
+      parameters:
+        - name: user
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User created
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /userdel:
+    post:
+      summary: Delete a user (and home directory)
+      parameters:
+        - name: user
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User deleted
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /firewallallow:
+    post:
+      summary: Allow a port (ufw or firewalld)
+      parameters:
+        - name: port
+          in: query
+          required: true
+          schema:
+            type: string
+            example: 8080/tcp
+      responses:
+        "200":
+          description: Rule applied
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /firewalldeny:
+    post:
+      summary: Deny/remove a port rule
+      parameters:
+        - name: port
+          in: query
+          required: true
+          schema:
+            type: string
+            example: 8080/tcp
+      responses:
+        "200":
+          description: Rule removed
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics (no authentication)
+      security: []
+      responses:
+        "200":
+          description: Prometheus text exposition format

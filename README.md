@@ -4,6 +4,14 @@
 
 ## Features
 
+- **Version command** (`version`) and **JSON output** for all CLI commands (`--json`)
+- **HTTPS/TLS support** for the API server
+- **API token auth** (Bearer) as alternative to Basic auth
+- **Request audit log** (JSONL) for the API
+- **Config file support** (`OSCTL_CONFIG`)
+- **Persistent rate limiting** across restarts
+- **Docker container logs and restart**, **user management**, **firewall rule management**
+- **Doctor command** for one-shot diagnostics and **health-change webhooks**
 - Show RAM usage
 - Show disk usage
 - Manage system services (start, stop, restart, status, enable, disable)
@@ -96,7 +104,17 @@ osctl [command]
   - `restart-failed`: Restart all failed systemd services
   - `sync-time`: Synchronize system time via NTP
   - `clear-cache`: Clear system caches and old journal logs
+- `doctor`: One-shot diagnostic report (health, failed services, disk, journal errors, updates)
+- `dockerlogs <container>`: Show last 50 log lines of a container
+- `dockerrestart <container>`: Restart a container
+- `userinfo <username>`: Show user identity and password aging
+- `useradd <username>`: Create a user with home directory
+- `userdel <username>`: Delete a user (and home directory)
+- `firewallallow <port>[/<proto>]`: Allow a port (ufw or firewalld)
+- `firewalldeny <port>[/<proto>]`: Deny/remove a port rule
+- `version`: Show osctl version
 - `api`: Run as an API server (default port: 12000)
+- `--json`: Prefix for any command to emit the result as JSON (`osctl --json <command>`)
 - `--help`: Show this help message
 
 CLI commands exit with status `0` on success and `1` on failure (invalid arguments, unknown command, or command error), so they can be used safely in scripts.
@@ -116,7 +134,7 @@ CLI commands exit with status `0` on success and `1` on failure (invalid argumen
 3. Build the binary:
 
    ```bash
-   go build -o osctl main.go auth.go metrics.go handlers.go system_info.go services.go health.go process.go extended_metrics.go security.go cron.go maintenance.go
+   go build -o osctl .
    ```
 
 4. Run the `osctl` binary:
@@ -157,6 +175,31 @@ Configure the API server using environment variables:
 - `OSCTL_PORT`: Server port (default: `12000`)
 - `OSCTL_USERNAME`: Basic auth username (default: `admin`)
 - `OSCTL_PASSWORD`: Basic auth password (default: `password`)
+- `OSCTL_API_TOKEN`: Bearer token as alternative to Basic auth (set to disable the password warning)
+- `OSCTL_TLS_CERT` / `OSCTL_TLS_KEY`: PEM certificate/key to serve the API over HTTPS
+- `OSCTL_AUDIT_LOG`: Path to a JSONL file where every API request (method, path, status, user, source IP) is logged
+- `OSCTL_STATE_DIR`: Directory for persisted auth-failure state (default: `/var/lib/osctl`)
+- `OSCTL_WEBHOOK_URL`: URL that receives a JSON POST whenever the health status changes
+- `OSCTL_HEALTH_INTERVAL`: Seconds between health checks for the webhook monitor (default: `300`, minimum: `30`)
+
+#### Config file
+
+Any of these variables can be set in a `KEY=VALUE` config file passed via `OSCTL_CONFIG`.
+Environment variables take precedence over the config file; unknown keys are ignored.
+
+```bash
+# /etc/osctl/osctl.conf
+OSCTL_PORT=12000
+OSCTL_USERNAME=ops
+OSCTL_PASSWORD=correct-horse-battery-staple
+OSCTL_API_TOKEN=...
+OSCTL_TLS_CERT=/etc/osctl/tls.crt
+OSCTL_TLS_KEY=/etc/osctl/tls.key
+OSCTL_AUDIT_LOG=/var/log/osctl/audit.jsonl
+
+export OSCTL_CONFIG=/etc/osctl/osctl.conf
+./osctl api
+```
 
 Example:
 ```bash
@@ -170,7 +213,14 @@ The API server provides the same functionalities as the CLI commands. Additional
 
 ## Authentication for API
 
-The API uses Basic Authentication for all endpoints except `/metrics`. 
+The API uses Basic Authentication **or** a Bearer token for all endpoints except `/metrics`. Set `OSCTL_API_TOKEN` to enable token authentication:
+
+```bash
+export OSCTL_API_TOKEN=my-secret-token
+curl -H "Authorization: Bearer my-secret-token" http://localhost:12000/ram
+```
+
+Basic auth continues to work alongside the token. 
 
 **Default credentials:**
 - Username: `admin`
@@ -205,6 +255,45 @@ curl http://localhost:12000/metrics
 ### HTTP status codes
 
 Responses use meaningful status codes: `200` success, `400` invalid input, `401` missing/invalid credentials, `405` wrong method (e.g. `GET /shutdown`), `429` rate-limited, `500` command failure. The body is always `{"result": "..."}`.
+Failed authentication attempts are persisted to `OSCTL_STATE_DIR` so the rate-limit
+survives restarts. When `OSCTL_AUDIT_LOG` is set, every request is appended as a JSONL entry:
+`{"time":"...","ip":"...","method":"GET","path":"/ram","status":200,"user":"admin"}`.
+
+### HTTPS / TLS
+
+Set both variables to serve the API over HTTPS:
+
+```bash
+export OSCTL_TLS_CERT=/etc/osctl/tls.crt
+export OSCTL_TLS_KEY=/etc/osctl/tls.key
+./osctl api
+# Server is listening on port 12000 (https)...
+```
+
+### Health webhooks
+
+With `OSCTL_WEBHOOK_URL` set, osctl checks its health status in the background
+(`OSCTL_HEALTH_INTERVAL`, default 5 minutes) and POSTs a JSON payload to the webhook
+URL whenever the overall status changes (e.g. `healthy` → `unhealthy`), together with
+the individual checks. Delivery failures are logged but never crash the server.
+
+```bash
+export OSCTL_WEBHOOK_URL=https://hooks.example.com/osctl
+export OSCTL_HEALTH_INTERVAL=60
+./osctl api
+```
+
+### OpenAPI
+
+A machine-readable API description is available in [`docs/openapi.yaml`](docs/openapi.yaml)
+and can be imported into Swagger UI, Postman, or API gateways.
+
+### Releases
+
+Releases are built with [GoReleaser](https://goreleaser.com) via GitHub Actions
+(`.github/workflows/release.yml`): pushing a `v*` tag runs the tests and publishes
+Linux binaries (amd64/arm64) plus checksums to the GitHub release. The version is
+injected from the tag via `-ldflags -X main.buildVersion`.
 
 ## Example Usage
 

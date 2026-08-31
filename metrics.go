@@ -66,6 +66,7 @@ func init() {
 }
 
 func runAPI() {
+	// Note: applyConfigFile() has already run in main(); do not load twice.
 	port := os.Getenv("OSCTL_PORT")
 	if port == "" {
 		port = "12000"
@@ -75,13 +76,25 @@ func runAPI() {
 		log.Fatalf("Invalid OSCTL_PORT %q: must be an integer between 1 and 65535", port)
 	}
 
-	if os.Getenv("OSCTL_PASSWORD") == "" {
-		log.Printf("WARNING: OSCTL_PASSWORD is not set; the API will accept the default credentials (admin/password). Set OSCTL_USERNAME/OSCTL_PASSWORD to secure the API.")
+	if os.Getenv("OSCTL_PASSWORD") == "" && os.Getenv("OSCTL_API_TOKEN") == "" {
+		log.Printf("WARNING: neither OSCTL_PASSWORD nor OSCTL_API_TOKEN is set; the API will accept the default credentials (admin/password).")
+	}
+
+	// Restore brute-force protection state across restarts.
+	loadAuthFailures(osctlStateDir())
+
+	// Optional JSONL request audit log.
+	auditLogPath := os.Getenv("OSCTL_AUDIT_LOG")
+	if err := initAuditLog(auditLogPath); err != nil {
+		log.Fatalf("Cannot open OSCTL_AUDIT_LOG %q: %v", auditLogPath, err)
+	}
+	if auditLogPath != "" {
+		log.Printf("Request audit log: %s", auditLogPath)
 	}
 
 	// Protected endpoints with basic auth
 	mux := http.NewServeMux()
-	mux.Handle("/", basicAuth(http.HandlerFunc(handleRequest)))
+	mux.Handle("/", basicAuth(auditMiddleware(http.HandlerFunc(handleRequest))))
 
 	// Public metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
@@ -98,7 +111,32 @@ func runAPI() {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	log.Printf("Server is listening on port %s...", port)
-	log.Printf("Metrics endpoint available at http://localhost:%s/metrics", port)
+	scheme := "http"
+
+	// Optional TLS. Both cert and key must be configured together.
+	tlsCert := os.Getenv("OSCTL_TLS_CERT")
+	tlsKey := os.Getenv("OSCTL_TLS_KEY")
+	switch {
+	case tlsCert != "" && tlsKey != "":
+		scheme = "https"
+	case tlsCert != "" || tlsKey != "":
+		log.Fatalf("OSCTL_TLS_CERT and OSCTL_TLS_KEY must be set together")
+	}
+
+	// Optional health-change webhook notifications.
+	if webhookURL := os.Getenv("OSCTL_WEBHOOK_URL"); webhookURL != "" {
+		interval := 300
+		if v, err := strconv.Atoi(os.Getenv("OSCTL_HEALTH_INTERVAL")); err == nil && v > 0 {
+			interval = v
+		}
+		startHealthMonitor(webhookURL, interval)
+	}
+
+	log.Printf("Server is listening on port %s (%s)...", port, scheme)
+	log.Printf("Metrics endpoint available at %s://localhost:%s/metrics", scheme, port)
+
+	if scheme == "https" {
+		log.Fatal(server.ListenAndServeTLS(tlsCert, tlsKey))
+	}
 	log.Fatal(server.ListenAndServe())
 }

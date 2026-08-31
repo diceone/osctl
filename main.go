@@ -1,73 +1,153 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 )
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] == "--help" {
+	applyConfigFile()
+
+	args := os.Args[1:]
+
+	// --json emits the result as {"result": "..."} for scripts.
+	jsonOut := false
+	if len(args) > 0 && (args[0] == "--json" || args[0] == "-j") {
+		jsonOut = true
+		args = args[1:]
+	}
+
+	if len(args) < 1 || args[0] == "--help" || args[0] == "-h" {
 		printHelp()
 		return
 	}
 
-	var result string
+	if args[0] == "api" {
+		runAPI()
+		return
+	}
 
-	switch os.Args[1] {
+	result := executeCommand(args)
+
+	if jsonOut {
+		data, err := json.Marshal(map[string]string{"result": result})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to encode JSON output: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(data))
+	} else {
+		fmt.Println(result)
+	}
+
+	if isErrorResult(result) {
+		os.Exit(1)
+	}
+}
+
+func executeCommand(args []string) string {
+	switch args[0] {
+	case "version":
+		return getVersion()
 	case "ram":
-		result = getRamUsage()
+		return getRamUsage()
 	case "disk":
-		result = getDiskUsage()
+		return getDiskUsage()
+	case "doctor":
+		return getDoctorReport()
 	case "service":
-		if len(os.Args) < 4 {
+		if len(args) < 3 {
 			fmt.Println("Usage: osctl service [start|stop|restart|status] [service_name]")
 			os.Exit(1)
 		}
-		result = manageService(os.Args[2], os.Args[3])
+		return manageService(args[1], args[2])
 	case "top":
-		result = getTopProcesses()
+		return getTopProcesses()
 	case "errors":
-		result = getLastJournalErrors()
+		return getLastJournalErrors()
 	case "users":
-		result = getLastLoggedUsers()
+		return getLastLoggedUsers()
 	case "uptime":
-		result = getUptime()
+		return getUptime()
 	case "osinfo":
-		result = getOSInfo()
+		return getOSInfo()
 	case "shutdown":
-		result = shutdownSystem()
+		return shutdownSystem()
 	case "reboot":
-		result = rebootSystem()
+		return rebootSystem()
 	case "ip":
-		result = getIPAddresses()
+		return getIPAddresses()
 	case "firewall":
-		result = getFirewalldRules()
+		return getFirewalldRules()
+	case "firewallallow":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl firewallallow <port>[/<proto>]")
+			os.Exit(1)
+		}
+		return manageFirewallRule("allow", args[1])
+	case "firewalldeny":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl firewalldeny <port>[/<proto>]")
+			os.Exit(1)
+		}
+		return manageFirewallRule("deny", args[1])
 	case "update":
-		result = updatePackages()
+		return updatePackages()
 	case "containers":
-		result = listDockerContainers()
+		return listDockerContainers()
 	case "images":
-		result = listDockerImages()
+		return listDockerImages()
+	case "dockerlogs":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl dockerlogs <container>")
+			os.Exit(1)
+		}
+		return dockerContainerLogs(args[1])
+	case "dockerrestart":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl dockerrestart <container>")
+			os.Exit(1)
+		}
+		return dockerRestartContainer(args[1])
+	case "userinfo":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl userinfo <username>")
+			os.Exit(1)
+		}
+		return getUserInfo(args[1])
+	case "useradd":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl useradd <username>")
+			os.Exit(1)
+		}
+		return addUser(args[1])
+	case "userdel":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl userdel <username>")
+			os.Exit(1)
+		}
+		return deleteUser(args[1])
 	case "cpu":
-		result = getCpuUsage()
+		return getCpuUsage()
 	case "load":
-		result = getLoadAverage()
+		return getLoadAverage()
 	case "network":
-		result = getNetworkStats()
+		return getNetworkStats()
 	case "connections":
-		result = getActiveConnections()
+		return getActiveConnections()
 	case "filesystems":
-		result = getMountedFilesystems()
+		return getMountedFilesystems()
 	case "dmesg":
-		result = getKernelMessages()
+		return getKernelMessages()
 	case "who":
-		result = getLoggedinUsers()
+		return getLoggedinUsers()
 	case "services":
-		result = getServiceStatuses()
+		return getServiceStatuses()
 	case "health":
-		result = getHealthCheck()
+		return getHealthCheck()
 	case "process":
-		if len(os.Args) < 3 {
+		if len(args) < 2 {
 			fmt.Println("Usage: osctl process [kill|killforce|nice|info|tree] [options]")
 			fmt.Println("  kill <pid>           - Terminate process")
 			fmt.Println("  killforce <pid>      - Force kill process")
@@ -76,69 +156,67 @@ func main() {
 			fmt.Println("  tree                 - Show process tree")
 			os.Exit(1)
 		}
-		action := os.Args[2]
-		switch action {
+		switch args[1] {
 		case "kill":
-			if len(os.Args) < 4 {
+			if len(args) < 3 {
 				fmt.Println("Usage: osctl process kill <pid>")
 				os.Exit(1)
 			}
-			result = killProcess(os.Args[3])
+			return killProcess(args[2])
 		case "killforce":
-			if len(os.Args) < 4 {
+			if len(args) < 3 {
 				fmt.Println("Usage: osctl process killforce <pid>")
 				os.Exit(1)
 			}
-			result = killProcessForce(os.Args[3])
+			return killProcessForce(args[2])
 		case "nice":
-			if len(os.Args) < 5 {
+			if len(args) < 4 {
 				fmt.Println("Usage: osctl process nice <pid> <priority>")
 				os.Exit(1)
 			}
-			result = setProcessPriority(os.Args[3], os.Args[4])
+			return setProcessPriority(args[2], args[3])
 		case "info":
-			if len(os.Args) < 4 {
+			if len(args) < 3 {
 				fmt.Println("Usage: osctl process info <pid>")
 				os.Exit(1)
 			}
-			result = getProcessInfo(os.Args[3])
+			return getProcessInfo(args[2])
 		case "tree":
-			result = getProcessTree()
+			return getProcessTree()
 		default:
 			fmt.Println("Unknown process action")
 			os.Exit(1)
 		}
 	case "networkio":
-		result = getNetworkIO()
+		return getNetworkIO()
 	case "diskio":
-		result = getDiskIO()
+		return getDiskIO()
 	case "procs":
-		result = getProcessCountByState()
+		return getProcessCountByState()
 	case "audit":
-		if len(os.Args) < 3 {
+		action := ""
+		if len(args) >= 2 {
+			action = args[1]
+		}
+		switch action {
+		case "ports":
+			return getOpenPorts()
+		case "files":
+			return checkSuspiciousFiles()
+		case "permissions":
+			return checkFilePermissions()
+		case "users":
+			return checkUnusedUsers()
+		case "ssh":
+			return checkSSHSecurity()
+		case "summary":
+			return getSecurityAuditSummary()
+		default:
 			fmt.Println("Usage: osctl audit [ports|files|permissions|users|ssh|summary]")
 			os.Exit(1)
 		}
-		action := os.Args[2]
-		switch action {
-		case "ports":
-			result = getOpenPorts()
-		case "files":
-			result = checkSuspiciousFiles()
-		case "permissions":
-			result = checkFilePermissions()
-		case "users":
-			result = checkUnusedUsers()
-		case "ssh":
-			result = checkSSHSecurity()
-		case "summary":
-			result = getSecurityAuditSummary()
-		default:
-			fmt.Println("Unknown audit action")
-			os.Exit(1)
-		}
 	case "cron":
-		if len(os.Args) < 3 {
+		if len(args) < 2 {
 			fmt.Println("Usage: osctl cron [list|add|remove|next]")
 			fmt.Println("  list              - List all cron jobs")
 			fmt.Println("  add <schedule> <cmd> - Add new cron job")
@@ -146,31 +224,30 @@ func main() {
 			fmt.Println("  next              - Show next scheduled runs")
 			os.Exit(1)
 		}
-		action := os.Args[2]
-		switch action {
+		switch args[1] {
 		case "list":
-			result = listCronJobsFormatted()
+			return listCronJobsFormatted()
 		case "add":
-			if len(os.Args) < 5 {
+			if len(args) < 4 {
 				fmt.Println("Usage: osctl cron add \"schedule\" \"command\"")
 				fmt.Println("Example: osctl cron add \"0 2 * * *\" \"/backup.sh\"")
 				os.Exit(1)
 			}
-			result = addCronJob(os.Args[3], os.Args[4])
+			return addCronJob(args[2], args[3])
 		case "remove":
-			if len(os.Args) < 4 {
+			if len(args) < 3 {
 				fmt.Println("Usage: osctl cron remove <line_number>")
 				os.Exit(1)
 			}
-			result = removeCronJob(os.Args[3])
+			return removeCronJob(args[2])
 		case "next":
-			result = getCronNextRun()
+			return getCronNextRun()
 		default:
 			fmt.Println("Unknown cron action")
 			os.Exit(1)
 		}
 	case "maintenance":
-		if len(os.Args) < 3 {
+		if len(args) < 2 {
 			fmt.Println("Usage: osctl maintenance [status|enable|disable|check-services|restart-failed|sync-time|clear-cache]")
 			fmt.Println("  status            - Show maintenance mode status")
 			fmt.Println("  enable            - Enable maintenance mode")
@@ -181,19 +258,12 @@ func main() {
 			fmt.Println("  clear-cache       - Clear system caches")
 			os.Exit(1)
 		}
-		action := os.Args[2]
-		result = getMaintenanceActions(action)
-	case "api":
-		runAPI()
-		return
+		return getMaintenanceActions(args[1])
 	default:
 		fmt.Println("Unknown command")
 		printHelp()
 		os.Exit(1)
 	}
 
-	fmt.Println(result)
-	if isErrorResult(result) {
-		os.Exit(1)
-	}
+	return "" // unreachable: every branch above returns or exits
 }
