@@ -99,6 +99,8 @@ osctl [command]
 - `api`: Run as an API server (default port: 12000)
 - `--help`: Show this help message
 
+CLI commands exit with status `0` on success and `1` on failure (invalid arguments, unknown command, or command error), so they can be used safely in scripts.
+
 ## Installation
 
 ### Building from Source
@@ -174,7 +176,9 @@ The API uses Basic Authentication for all endpoints except `/metrics`.
 - Username: `admin`
 - Password: `password`
 
-**⚠️ Security Warning:** Change the default credentials using environment variables in production environments!
+**⚠️ Security Warning:** Change the default credentials using environment variables in production environments! The server logs a warning at startup when `OSCTL_PASSWORD` is not set.
+
+Repeated failed login attempts from the same address are rate limited: after 10 failures within 5 minutes, further requests receive `429 Too Many Requests` until the window expires.
 
 ### API Usage Examples
 
@@ -188,10 +192,19 @@ Manage a service:
 curl -u admin:password "http://localhost:12000/service?action=status&service=nginx"
 ```
 
+Shutdown the system (**POST required** — destructive endpoints reject `GET` with `405`):
+```bash
+curl -u admin:password -X POST http://localhost:12000/shutdown
+```
+
 Access Prometheus metrics (no auth required):
 ```bash
 curl http://localhost:12000/metrics
 ```
+
+### HTTP status codes
+
+Responses use meaningful status codes: `200` success, `400` invalid input, `401` missing/invalid credentials, `405` wrong method (e.g. `GET /shutdown`), `429` rate-limited, `500` command failure. The body is always `{"result": "..."}`.
 
 ## Example Usage
 

@@ -30,11 +30,39 @@ func manageService(action, service string) string {
 	}
 
 	cmd := exec.Command("systemctl", action, service)
+
+	// status is a read-only query: always report its output so callers
+	// can see the actual unit state.
+	if action == "status" {
+		out, err := cmd.CombinedOutput()
+		if err != nil && len(out) == 0 {
+			return fmt.Sprintf("Failed to get status of service %s. Error: %v", service, err)
+		}
+		return string(out)
+	}
+
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to %s service %s. Error: %v", action, service, err)
 	}
-	return fmt.Sprintf("Service %s %sed successfully.", service, action)
+	pastTense := map[string]string{
+		"start":   "started",
+		"stop":    "stopped",
+		"restart": "restarted",
+		"enable":  "enabled",
+		"disable": "disabled",
+	}
+	return fmt.Sprintf("Service %s %s successfully.", service, pastTense[action])
+}
+
+// runPackageCmd runs a preparatory package command (e.g. apt-get update) and
+// returns its formatted error if it fails.
+func runPackageCmd(cmd *exec.Cmd) string {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("Failed to run %s. Error: %v\n%s", cmd.Path, err, string(out))
+	}
+	return ""
 }
 
 func shutdownSystem() string {
@@ -62,14 +90,18 @@ func updatePackages() string {
 	if data, err := os.ReadFile("/etc/os-release"); err == nil {
 		osRelease := string(data)
 		if strings.Contains(strings.ToLower(osRelease), "ubuntu") || strings.Contains(strings.ToLower(osRelease), "debian") {
-			cmd = exec.Command("apt-get", "update", "-y")
-			cmd.Run()
+			if msg := runPackageCmd(exec.Command("apt-get", "update", "-y")); msg != "" {
+				return msg
+			}
 			cmd = exec.Command("apt-get", "upgrade", "-y")
+			// Avoid interactive prompts from upgrade.
+			cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 		} else if strings.Contains(strings.ToLower(osRelease), "rhel") || strings.Contains(strings.ToLower(osRelease), "centos") || strings.Contains(strings.ToLower(osRelease), "fedora") {
 			cmd = exec.Command("yum", "update", "-y")
 		} else if strings.Contains(strings.ToLower(osRelease), "suse") || strings.Contains(strings.ToLower(osRelease), "opensuse") {
-			cmd = exec.Command("zypper", "refresh")
-			cmd.Run()
+			if msg := runPackageCmd(exec.Command("zypper", "refresh")); msg != "" {
+				return msg
+			}
 			cmd = exec.Command("zypper", "update", "-y")
 		} else {
 			return "Unsupported OS for package update"
@@ -79,9 +111,11 @@ func updatePackages() string {
 		if _, err := os.Stat("/etc/redhat-release"); err == nil {
 			cmd = exec.Command("yum", "update", "-y")
 		} else if _, err := os.Stat("/etc/debian_version"); err == nil {
-			cmd = exec.Command("apt-get", "update", "-y")
-			cmd.Run()
+			if msg := runPackageCmd(exec.Command("apt-get", "update", "-y")); msg != "" {
+				return msg
+			}
 			cmd = exec.Command("apt-get", "upgrade", "-y")
+			cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 		} else {
 			return "Unsupported OS for package update"
 		}

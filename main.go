@@ -11,61 +11,61 @@ func main() {
 		return
 	}
 
+	var result string
+
 	switch os.Args[1] {
 	case "ram":
-		fmt.Println(getRamUsage())
+		result = getRamUsage()
 	case "disk":
-		fmt.Println(getDiskUsage())
+		result = getDiskUsage()
 	case "service":
 		if len(os.Args) < 4 {
 			fmt.Println("Usage: osctl service [start|stop|restart|status] [service_name]")
-			return
+			os.Exit(1)
 		}
-		action := os.Args[2]
-		service := os.Args[3]
-		fmt.Println(manageService(action, service))
+		result = manageService(os.Args[2], os.Args[3])
 	case "top":
-		fmt.Println(getTopProcesses())
+		result = getTopProcesses()
 	case "errors":
-		fmt.Println(getLastJournalErrors())
+		result = getLastJournalErrors()
 	case "users":
-		fmt.Println(getLastLoggedUsers())
+		result = getLastLoggedUsers()
 	case "uptime":
-		fmt.Println(getUptime())
+		result = getUptime()
 	case "osinfo":
-		fmt.Println(getOSInfo())
+		result = getOSInfo()
 	case "shutdown":
-		fmt.Println(shutdownSystem())
+		result = shutdownSystem()
 	case "reboot":
-		fmt.Println(rebootSystem())
+		result = rebootSystem()
 	case "ip":
-		fmt.Println(getIPAddresses())
+		result = getIPAddresses()
 	case "firewall":
-		fmt.Println(getFirewalldRules())
+		result = getFirewalldRules()
 	case "update":
-		fmt.Println(updatePackages())
+		result = updatePackages()
 	case "containers":
-		fmt.Println(listDockerContainers())
+		result = listDockerContainers()
 	case "images":
-		fmt.Println(listDockerImages())
+		result = listDockerImages()
 	case "cpu":
-		fmt.Println(getCpuUsage())
+		result = getCpuUsage()
 	case "load":
-		fmt.Println(getLoadAverage())
+		result = getLoadAverage()
 	case "network":
-		fmt.Println(getNetworkStats())
+		result = getNetworkStats()
 	case "connections":
-		fmt.Println(getActiveConnections())
+		result = getActiveConnections()
 	case "filesystems":
-		fmt.Println(getMountedFilesystems())
+		result = getMountedFilesystems()
 	case "dmesg":
-		fmt.Println(getKernelMessages())
+		result = getKernelMessages()
 	case "who":
-		fmt.Println(getLoggedinUsers())
+		result = getLoggedinUsers()
 	case "services":
-		fmt.Println(getServiceStatuses())
+		result = getServiceStatuses()
 	case "health":
-		fmt.Println(getHealthCheck())
+		result = getHealthCheck()
 	case "process":
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: osctl process [kill|killforce|nice|info|tree] [options]")
@@ -74,66 +74,68 @@ func main() {
 			fmt.Println("  nice <pid> <priority> - Set process priority (-20 to 19)")
 			fmt.Println("  info <pid>           - Show process information")
 			fmt.Println("  tree                 - Show process tree")
-			return
+			os.Exit(1)
 		}
 		action := os.Args[2]
 		switch action {
 		case "kill":
 			if len(os.Args) < 4 {
 				fmt.Println("Usage: osctl process kill <pid>")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(killProcess(os.Args[3]))
+			result = killProcess(os.Args[3])
 		case "killforce":
 			if len(os.Args) < 4 {
 				fmt.Println("Usage: osctl process killforce <pid>")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(killProcessForce(os.Args[3]))
+			result = killProcessForce(os.Args[3])
 		case "nice":
 			if len(os.Args) < 5 {
 				fmt.Println("Usage: osctl process nice <pid> <priority>")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(setProcessPriority(os.Args[3], os.Args[4]))
+			result = setProcessPriority(os.Args[3], os.Args[4])
 		case "info":
 			if len(os.Args) < 4 {
 				fmt.Println("Usage: osctl process info <pid>")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(getProcessInfo(os.Args[3]))
+			result = getProcessInfo(os.Args[3])
 		case "tree":
-			fmt.Println(getProcessTree())
+			result = getProcessTree()
 		default:
 			fmt.Println("Unknown process action")
+			os.Exit(1)
 		}
 	case "networkio":
-		fmt.Println(getNetworkIO())
+		result = getNetworkIO()
 	case "diskio":
-		fmt.Println(getDiskIO())
+		result = getDiskIO()
 	case "procs":
-		fmt.Println(getProcessCountByState())
+		result = getProcessCountByState()
 	case "audit":
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: osctl audit [ports|files|permissions|users|ssh|summary]")
-			return
+			os.Exit(1)
 		}
 		action := os.Args[2]
 		switch action {
 		case "ports":
-			fmt.Println(getOpenPorts())
+			result = getOpenPorts()
 		case "files":
-			fmt.Println(checkSuspiciousFiles())
+			result = checkSuspiciousFiles()
 		case "permissions":
-			fmt.Println(checkFilePermissions())
+			result = checkFilePermissions()
 		case "users":
-			fmt.Println(checkUnusedUsers())
+			result = checkUnusedUsers()
 		case "ssh":
-			fmt.Println(checkSSHSecurity())
+			result = checkSSHSecurity()
 		case "summary":
-			fmt.Println(getSecurityAuditSummary())
+			result = getSecurityAuditSummary()
 		default:
 			fmt.Println("Unknown audit action")
+			os.Exit(1)
 		}
 	case "cron":
 		if len(os.Args) < 3 {
@@ -142,29 +144,30 @@ func main() {
 			fmt.Println("  add <schedule> <cmd> - Add new cron job")
 			fmt.Println("  remove <line>     - Remove cron job by line number")
 			fmt.Println("  next              - Show next scheduled runs")
-			return
+			os.Exit(1)
 		}
 		action := os.Args[2]
 		switch action {
 		case "list":
-			fmt.Println(listCronJobsFormatted())
+			result = listCronJobsFormatted()
 		case "add":
 			if len(os.Args) < 5 {
 				fmt.Println("Usage: osctl cron add \"schedule\" \"command\"")
 				fmt.Println("Example: osctl cron add \"0 2 * * *\" \"/backup.sh\"")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(addCronJob(os.Args[3], os.Args[4]))
+			result = addCronJob(os.Args[3], os.Args[4])
 		case "remove":
 			if len(os.Args) < 4 {
 				fmt.Println("Usage: osctl cron remove <line_number>")
-				return
+				os.Exit(1)
 			}
-			fmt.Println(removeCronJob(os.Args[3]))
+			result = removeCronJob(os.Args[3])
 		case "next":
-			fmt.Println(getCronNextRun())
+			result = getCronNextRun()
 		default:
 			fmt.Println("Unknown cron action")
+			os.Exit(1)
 		}
 	case "maintenance":
 		if len(os.Args) < 3 {
@@ -176,14 +179,21 @@ func main() {
 			fmt.Println("  restart-failed    - Restart all failed services")
 			fmt.Println("  sync-time         - Synchronize system time")
 			fmt.Println("  clear-cache       - Clear system caches")
-			return
+			os.Exit(1)
 		}
 		action := os.Args[2]
-		fmt.Println(getMaintenanceActions(action))
+		result = getMaintenanceActions(action)
 	case "api":
 		runAPI()
+		return
 	default:
 		fmt.Println("Unknown command")
 		printHelp()
+		os.Exit(1)
+	}
+
+	fmt.Println(result)
+	if isErrorResult(result) {
+		os.Exit(1)
 	}
 }

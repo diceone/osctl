@@ -176,6 +176,32 @@ func getTopProcesses() string {
 		return fmt.Sprintf("Error getting processes: %v", err)
 	}
 
+	type procSample struct {
+		p     *process.Process
+		name  string
+		total float64
+	}
+
+	// p.CPUPercent() returns usage since process start, which makes "top"
+	// meaningless (every long-running process shows ~0%). Take two
+	// instantaneous CPU-time samples and report the delta instead.
+	const sampleInterval = 200 * time.Millisecond
+
+	var samples []procSample
+	for _, p := range procs {
+		name, err := p.Name()
+		if err != nil || name == "" {
+			continue
+		}
+		times, err := p.Times()
+		if err != nil {
+			continue
+		}
+		samples = append(samples, procSample{p: p, name: name, total: times.User + times.System + times.Nice})
+	}
+
+	time.Sleep(sampleInterval)
+
 	type procInfo struct {
 		PID  int32
 		Name string
@@ -184,20 +210,25 @@ func getTopProcesses() string {
 	}
 
 	var procList []procInfo
-	for _, p := range procs {
-		name, err := p.Name()
+	for _, s := range samples {
+		times, err := s.p.Times()
 		if err != nil {
 			continue
 		}
-		cpu, err := p.CPUPercent()
+		delta := (times.User + times.System + times.Nice) - s.total
+		if delta < 0 {
+			delta = 0
+		}
+		mem, err := s.p.MemoryPercent()
 		if err != nil {
 			continue
 		}
-		mem, err := p.MemoryPercent()
-		if err != nil {
-			continue
-		}
-		procList = append(procList, procInfo{PID: p.Pid, Name: name, CPU: cpu, Mem: mem})
+		procList = append(procList, procInfo{
+			PID:  s.p.Pid,
+			Name: s.name,
+			CPU:  delta / sampleInterval.Seconds() * 100,
+			Mem:  mem,
+		})
 	}
 
 	sort.Slice(procList, func(i, j int) bool {

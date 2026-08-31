@@ -5,11 +5,21 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-const maintenanceFlagFile = "/tmp/osctl_maintenance_mode"
+// maintenanceFlagPath returns the path of the maintenance-mode flag file. It
+// prefers /run (tmpfs, cleared on reboot) and falls back to the temp dir when
+// /run is not writable.
+func maintenanceFlagPath() string {
+	if err := os.MkdirAll("/run/osctl", 0o755); err == nil {
+		return "/run/osctl/maintenance_mode.json"
+	}
+	return filepath.Join(os.TempDir(), "osctl_maintenance_mode")
+}
 
 // MaintenanceStatus represents the current maintenance mode state
 type MaintenanceStatus struct {
@@ -21,11 +31,18 @@ type MaintenanceStatus struct {
 
 // enableMaintenanceMode activates maintenance mode
 func enableMaintenanceMode(message string) string {
+	enabledBy := os.Getenv("USER")
+	if enabledBy == "" {
+		if u, err := user.Current(); err == nil {
+			enabledBy = u.Username
+		}
+	}
+
 	status := MaintenanceStatus{
 		Enabled:   true,
 		Message:   message,
 		EnabledAt: time.Now(),
-		EnabledBy: os.Getenv("USER"),
+		EnabledBy: enabledBy,
 	}
 
 	data, err := json.MarshalIndent(status, "", "  ")
@@ -33,7 +50,7 @@ func enableMaintenanceMode(message string) string {
 		return fmt.Sprintf("Failed to create maintenance status: %v", err)
 	}
 
-	if err := os.WriteFile(maintenanceFlagFile, data, 0644); err != nil {
+	if err := os.WriteFile(maintenanceFlagPath(), data, 0o600); err != nil {
 		return fmt.Sprintf("Failed to enable maintenance mode: %v", err)
 	}
 
@@ -48,11 +65,11 @@ func enableMaintenanceMode(message string) string {
 
 // disableMaintenanceMode deactivates maintenance mode
 func disableMaintenanceMode() string {
-	if _, err := os.Stat(maintenanceFlagFile); os.IsNotExist(err) {
+	if _, err := os.Stat(maintenanceFlagPath()); os.IsNotExist(err) {
 		return "Maintenance mode is not enabled"
 	}
 
-	if err := os.Remove(maintenanceFlagFile); err != nil {
+	if err := os.Remove(maintenanceFlagPath()); err != nil {
 		return fmt.Sprintf("Failed to disable maintenance mode: %v", err)
 	}
 
@@ -69,9 +86,14 @@ func getMaintenanceStatus() string {
 		Enabled: false,
 	}
 
-	data, err := os.ReadFile(maintenanceFlagFile)
+	data, err := os.ReadFile(maintenanceFlagPath())
 	if err == nil {
-		json.Unmarshal(data, &status)
+		if err := json.Unmarshal(data, &status); err != nil {
+			status = MaintenanceStatus{
+				Enabled: false,
+				Message: "Maintenance flag file is corrupt; treating as disabled",
+			}
+		}
 	}
 
 	output, _ := json.MarshalIndent(status, "", "  ")

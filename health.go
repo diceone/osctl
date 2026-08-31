@@ -31,6 +31,18 @@ type HealthResponse struct {
 	Uptime    string                 `json:"uptime"`
 }
 
+// worsen returns the more severe of two health statuses, so an unhealthy
+// individual check can never show an overall "degraded" response.
+func worsen(current, candidate HealthStatus) HealthStatus {
+	if current == StatusUnhealthy || candidate == StatusUnhealthy {
+		return StatusUnhealthy
+	}
+	if current == StatusDegraded || candidate == StatusDegraded {
+		return StatusDegraded
+	}
+	return StatusHealthy
+}
+
 func getHealthCheck() string {
 	checks := make(map[string]HealthCheck)
 	overallStatus := StatusHealthy
@@ -47,13 +59,10 @@ func getHealthCheck() string {
 		memStatus := StatusHealthy
 		if v.UsedPercent > 90 {
 			memStatus = StatusUnhealthy
-			overallStatus = StatusDegraded
 		} else if v.UsedPercent > 80 {
 			memStatus = StatusDegraded
-			if overallStatus == StatusHealthy {
-				overallStatus = StatusDegraded
-			}
 		}
+		overallStatus = worsen(overallStatus, memStatus)
 		checks["memory"] = HealthCheck{
 			Status:  memStatus,
 			Value:   fmt.Sprintf("%.2f%%", v.UsedPercent),
@@ -73,13 +82,10 @@ func getHealthCheck() string {
 		diskStatus := StatusHealthy
 		if d.UsedPercent > 95 {
 			diskStatus = StatusUnhealthy
-			overallStatus = StatusDegraded
 		} else if d.UsedPercent > 85 {
 			diskStatus = StatusDegraded
-			if overallStatus == StatusHealthy {
-				overallStatus = StatusDegraded
-			}
 		}
+		overallStatus = worsen(overallStatus, diskStatus)
 		checks["disk"] = HealthCheck{
 			Status:  diskStatus,
 			Value:   fmt.Sprintf("%.2f%%", d.UsedPercent),
@@ -89,20 +95,22 @@ func getHealthCheck() string {
 
 	// Check CPU
 	cpuPercent, err := cpu.Percent(time.Second, false)
-	if err != nil {
+	if err != nil || len(cpuPercent) == 0 {
+		msg := "Failed to get CPU info"
+		if err != nil {
+			msg = fmt.Sprintf("Failed to get CPU info: %v", err)
+		}
 		checks["cpu"] = HealthCheck{
 			Status:  StatusUnhealthy,
-			Message: fmt.Sprintf("Failed to get CPU info: %v", err),
+			Message: msg,
 		}
 		overallStatus = StatusUnhealthy
 	} else {
 		cpuStatus := StatusHealthy
 		if cpuPercent[0] > 95 {
 			cpuStatus = StatusDegraded
-			if overallStatus == StatusHealthy {
-				overallStatus = StatusDegraded
-			}
 		}
+		overallStatus = worsen(overallStatus, cpuStatus)
 		checks["cpu"] = HealthCheck{
 			Status:  cpuStatus,
 			Value:   fmt.Sprintf("%.2f%%", cpuPercent[0]),

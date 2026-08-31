@@ -5,20 +5,33 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shirou/gopsutil/process"
 )
 
+// maxPID matches the upper bound of /proc/sys/kernel/pid_max on 64-bit Linux.
+const maxPID = 4194304
+
+// validatePID ensures the value is a positive PID. Negative values are
+// rejected because kill/renice interpret them as process groups.
+func validatePID(pid string) (int, error) {
+	n, err := strconv.Atoi(pid)
+	if err != nil || n < 1 || n > maxPID {
+		return 0, fmt.Errorf("must be an integer between 1 and %d", maxPID)
+	}
+	return n, nil
+}
+
 // killProcess terminates a process by PID
 func killProcess(pid string) string {
 	// Validate PID
-	_, err := strconv.Atoi(pid)
-	if err != nil {
-		return fmt.Sprintf("Invalid PID: %s", pid)
+	if _, err := validatePID(pid); err != nil {
+		return fmt.Sprintf("Invalid PID %q (%v)", pid, err)
 	}
 
 	cmd := exec.Command("kill", pid)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to kill process %s. Error: %v", pid, err)
 	}
@@ -28,13 +41,12 @@ func killProcess(pid string) string {
 // killProcessForce forcefully terminates a process by PID
 func killProcessForce(pid string) string {
 	// Validate PID
-	_, err := strconv.Atoi(pid)
-	if err != nil {
-		return fmt.Sprintf("Invalid PID: %s", pid)
+	if _, err := validatePID(pid); err != nil {
+		return fmt.Sprintf("Invalid PID %q (%v)", pid, err)
 	}
 
 	cmd := exec.Command("kill", "-9", pid)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to force kill process %s. Error: %v", pid, err)
 	}
@@ -44,9 +56,8 @@ func killProcessForce(pid string) string {
 // setProcessPriority sets the nice value (priority) of a process
 func setProcessPriority(pid, priority string) string {
 	// Validate PID
-	_, err := strconv.Atoi(pid)
-	if err != nil {
-		return fmt.Sprintf("Invalid PID: %s", pid)
+	if _, err := validatePID(pid); err != nil {
+		return fmt.Sprintf("Invalid PID %q (%v)", pid, err)
 	}
 
 	// Validate priority (-20 to 19)
@@ -55,7 +66,7 @@ func setProcessPriority(pid, priority string) string {
 		return "Invalid priority. Must be between -20 (highest) and 19 (lowest)"
 	}
 
-	cmd := exec.Command("renice", "-n", priority, "-p", pid)
+	cmd := exec.Command("renice", "-n", strconv.Itoa(prio), "-p", pid)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("Failed to set priority for process %s. Error: %v", pid, err)
@@ -66,14 +77,14 @@ func setProcessPriority(pid, priority string) string {
 // getProcessInfo gets detailed information about a process
 func getProcessInfo(pid string) string {
 	// Validate PID
-	pidInt, err := strconv.Atoi(pid)
+	pidInt, err := validatePID(pid)
 	if err != nil {
-		return fmt.Sprintf("Invalid PID: %s", pid)
+		return fmt.Sprintf("Invalid PID %q (%v)", pid, err)
 	}
 
 	proc, err := process.NewProcess(int32(pidInt))
 	if err != nil {
-		return fmt.Sprintf("Process %s not found. Error: %v", pid, err)
+		return fmt.Sprintf("Failed to find process %s. Error: %v", pid, err)
 	}
 
 	var output strings.Builder
@@ -103,7 +114,7 @@ func getProcessInfo(pid string) string {
 	output.WriteString(fmt.Sprintf("Threads: %d\n", numThreads))
 
 	createTime, _ := proc.CreateTime()
-	output.WriteString(fmt.Sprintf("Started: %d\n", createTime))
+	output.WriteString(fmt.Sprintf("Started: %s\n", time.UnixMilli(createTime).Format(time.RFC3339)))
 
 	username, _ := proc.Username()
 	output.WriteString(fmt.Sprintf("User: %s\n", username))

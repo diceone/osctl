@@ -3,56 +3,67 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
-// listCronJobs lists all cron jobs for all users
-func listCronJobs() string {
-	var output strings.Builder
-	output.WriteString("Cron Jobs:\n\n")
+// Limits to prevent oversize/injection payloads from reaching crontab.
+const (
+	maxCronScheduleLength = 100
+	maxCronCommandLength  = 1024
+)
 
-	// List system-wide cron jobs
-	output.WriteString("=== System Cron Jobs ===\n")
+// isCronFieldChar reports whether r is valid inside a single cron field
+// (digits, step/range/list syntax, and month/weekday names).
+func isCronFieldChar(r rune) bool {
+	if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+		return true
+	}
+	switch r {
+	case '*', '/', '-', ',':
+		return true
+	}
+	return false
+}
 
-	// /etc/crontab
-	cmd := exec.Command("cat", "/etc/crontab")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		output.WriteString("\n/etc/crontab:\n")
-		output.WriteString(string(out))
-		output.WriteString("\n")
+// validateCronSchedule checks that the schedule has exactly 5 fields with only
+// characters cron understands, rejecting anything that could smuggle in
+// additional crontab lines.
+func validateCronSchedule(schedule string) error {
+	if len(schedule) > maxCronScheduleLength {
+		return fmt.Errorf("schedule too long (max %d characters)", maxCronScheduleLength)
 	}
 
-	// /etc/cron.d/
-	cmd = exec.Command("sh", "-c", "ls -1 /etc/cron.d/ 2>/dev/null")
-	out, err = cmd.CombinedOutput()
-	if err == nil && len(out) > 0 {
-		output.WriteString("\n/etc/cron.d/:\n")
-		files := strings.Split(strings.TrimSpace(string(out)), "\n")
-		for _, file := range files {
-			if file == "" {
-				continue
-			}
-			cmd = exec.Command("cat", "/etc/cron.d/"+file)
-			fileOut, err := cmd.CombinedOutput()
-			if err == nil {
-				output.WriteString(fmt.Sprintf("\n  File: %s\n", file))
-				output.WriteString(string(fileOut))
+	parts := strings.Fields(schedule)
+	if len(parts) != 5 {
+		return fmt.Errorf("invalid cron schedule format. Expected 5 fields: minute hour day month weekday")
+	}
+
+	for _, field := range parts {
+		for _, r := range field {
+			if !isCronFieldChar(r) {
+				return fmt.Errorf("invalid character %q in schedule field %q (allowed: digits, *, /, -, ',' and names)", r, field)
 			}
 		}
 	}
+	return nil
+}
 
-	// User cron jobs
-	output.WriteString("\n\n=== User Cron Jobs ===\n")
-	cmd = exec.Command("sh", "-c", "for user in $(cut -f1 -d: /etc/passwd); do crontab -u $user -l 2>/dev/null && echo \"User: $user\"; done")
-	out, err = cmd.CombinedOutput()
-	if err == nil && len(out) > 0 {
-		output.WriteString(string(out))
-	} else {
-		output.WriteString("No user cron jobs found or insufficient permissions\n")
+// validateCronCommand rejects control characters (notably newlines) that would
+// let a caller inject additional crontab entries, and empty commands.
+func validateCronCommand(command string) error {
+	if command == "" {
+		return fmt.Errorf("command must not be empty")
 	}
-
-	return output.String()
+	if len(command) > maxCronCommandLength {
+		return fmt.Errorf("too long (max %d characters)", maxCronCommandLength)
+	}
+	for _, r := range command {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("contains control characters")
+		}
+	}
+	return nil
 }
 
 // addCronJob adds a cron job for the current user
@@ -61,15 +72,20 @@ func addCronJob(schedule, command string) string {
 		return "Usage: osctl cron add \"schedule\" \"command\"\nExample: osctl cron add \"0 2 * * *\" \"/backup.sh\""
 	}
 
-	// Validate cron schedule format (basic validation)
-	parts := strings.Fields(schedule)
-	if len(parts) != 5 {
-		return "Invalid cron schedule format. Expected 5 fields: minute hour day month weekday"
+	if err := validateCronSchedule(schedule); err != nil {
+		return "Invalid cron schedule: " + err.Error()
+	}
+	if err := validateCronCommand(command); err != nil {
+		return "Invalid cron command: " + err.Error()
 	}
 
-	// Get current crontab
+	// Get current crontab. Exit status 1 with no stdout means the user has
+	// no crontab yet; only fail on a real error that produced output.
 	cmd := exec.Command("crontab", "-l")
-	currentCron, _ := cmd.CombinedOutput()
+	currentCron, err := cmd.Output()
+	if err != nil && len(currentCron) > 0 {
+		return fmt.Sprintf("Failed to get current crontab. Error: %v", err)
+	}
 
 	// Append new job
 	newCron := string(currentCron)
@@ -81,7 +97,7 @@ func addCronJob(schedule, command string) string {
 	// Write new crontab
 	cmd = exec.Command("crontab", "-")
 	cmd.Stdin = strings.NewReader(newCron)
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Sprintf("Failed to add cron job. Error: %v", err)
 	}
@@ -97,14 +113,21 @@ func removeCronJob(lineNumber string) string {
 
 	// Get current crontab
 	cmd := exec.Command("crontab", "-l")
-	currentCron, err := cmd.CombinedOutput()
-	if err != nil {
+	currentCron, err := cmd.Output()
+	if err != nil && len(currentCron) == 0 {
 		return fmt.Sprintf("Failed to get current crontab. Error: %v", err)
 	}
 
-	lines := strings.Split(string(currentCron), "\n")
-	var lineNum int
-	fmt.Sscanf(lineNumber, "%d", &lineNum)
+	content := strings.TrimRight(string(currentCron), "\n")
+	if content == "" {
+		return "Crontab is empty; nothing to remove"
+	}
+	lines := strings.Split(content, "\n")
+
+	lineNum, parseErr := strconv.Atoi(strings.TrimSpace(lineNumber))
+	if parseErr != nil {
+		return fmt.Sprintf("Invalid line number %q: must be an integer", lineNumber)
+	}
 
 	if lineNum < 1 || lineNum > len(lines) {
 		return fmt.Sprintf("Invalid line number. Valid range: 1-%d", len(lines))
@@ -112,7 +135,7 @@ func removeCronJob(lineNumber string) string {
 
 	// Remove the line (convert to 0-based index)
 	lines = append(lines[:lineNum-1], lines[lineNum:]...)
-	newCron := strings.Join(lines, "\n")
+	newCron := strings.Join(lines, "\n") + "\n"
 
 	// Write new crontab
 	cmd = exec.Command("crontab", "-")
@@ -131,7 +154,7 @@ func listCronJobsFormatted() string {
 	output.WriteString("Current User Cron Jobs:\n\n")
 
 	cmd := exec.Command("crontab", "-l")
-	currentCron, err := cmd.CombinedOutput()
+	currentCron, err := cmd.Output()
 	if err != nil {
 		return "No crontab for current user or insufficient permissions"
 	}

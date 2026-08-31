@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt" // Added import
+	"log"
 	"net/http"
+	"strings"
 )
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path[1:]
+	path := strings.Trim(r.URL.Path, "/")
 
 	var result string
 
@@ -39,10 +41,19 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = getUptime()
 	case "osinfo":
 		result = getOSInfo()
-	case "shutdown":
-		result = shutdownSystem()
-	case "reboot":
-		result = rebootSystem()
+	case "shutdown", "reboot":
+		// Destructive endpoints must not be triggerable by a navigational
+		// GET (browsers attach cached Basic Auth to top-level navigations).
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "Method not allowed. shutdown and reboot require POST", http.StatusMethodNotAllowed)
+			return
+		}
+		if path == "shutdown" {
+			result = shutdownSystem()
+		} else {
+			result = rebootSystem()
+		}
 	case "ip":
 		result = getIPAddresses()
 	case "firewall":
@@ -172,7 +183,33 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"result": result})
+	w.WriteHeader(httpStatusFor(result))
+	if err := json.NewEncoder(w).Encode(map[string]string{"result": result}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
+}
+
+// httpStatusFor maps error-prefixed result strings to HTTP status codes so
+// clients can rely on the response code instead of parsing the body.
+func httpStatusFor(result string) int {
+	switch {
+	case strings.HasPrefix(result, "Usage:"),
+		strings.HasPrefix(result, "Invalid"),
+		strings.HasPrefix(result, "Unknown"),
+		strings.HasPrefix(result, "Unsupported"):
+		return http.StatusBadRequest
+	case strings.HasPrefix(result, "Error"),
+		strings.HasPrefix(result, "Failed"):
+		return http.StatusInternalServerError
+	default:
+		return http.StatusOK
+	}
+}
+
+// isErrorResult reports whether a result string represents a failure. The CLI
+// uses it to pick a non-zero exit code.
+func isErrorResult(result string) bool {
+	return httpStatusFor(result) != http.StatusOK
 }
 
 func printHelp() {

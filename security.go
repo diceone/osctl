@@ -37,8 +37,8 @@ func checkSuspiciousFiles() string {
 	output.WriteString("World-writable files in critical directories:\n")
 	for _, dir := range criticalDirs {
 		cmd := exec.Command("find", dir, "-type", "f", "-perm", "-002", "-ls")
-		out, err := cmd.CombinedOutput()
-		if err == nil && len(out) > 0 {
+		out, err := cmd.Output() // stderr discarded, permission errors are expected
+		if err == nil && len(strings.TrimSpace(string(out))) > 0 {
 			output.WriteString(fmt.Sprintf("\nIn %s:\n", dir))
 			output.WriteString(string(out))
 		}
@@ -47,8 +47,8 @@ func checkSuspiciousFiles() string {
 	// Check for SUID/SGID files
 	output.WriteString("\n\nSUID/SGID files (may be security risk):\n")
 	cmd := exec.Command("find", "/", "-type", "f", "(", "-perm", "-4000", "-o", "-perm", "-2000", ")", "-ls")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
+	out, err := cmd.Output() // PermissionError noise on stderr is expected
+	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
 		lines := strings.Split(string(out), "\n")
 		// Limit output to first 50 lines
 		if len(lines) > 50 {
@@ -57,6 +57,8 @@ func checkSuspiciousFiles() string {
 		} else {
 			output.WriteString(string(out))
 		}
+	} else {
+		output.WriteString("(none found or cannot scan)\n")
 	}
 
 	return output.String()
@@ -127,19 +129,35 @@ func getSecurityAuditSummary() string {
 
 	// Count open ports
 	cmd := exec.Command("ss", "-tulpn")
-	portOut, _ := cmd.CombinedOutput()
+	portOut, _ := cmd.Output()
 	portCount := strings.Count(string(portOut), "LISTEN")
 	output.WriteString(fmt.Sprintf("Open listening ports: %d\n", portCount))
 
-	// Check for failed login attempts
-	cmd = exec.Command("sh", "-c", "grep 'Failed password' /var/log/auth.log 2>/dev/null | wc -l")
-	failedOut, _ := cmd.CombinedOutput()
-	output.WriteString(fmt.Sprintf("Failed login attempts (auth.log): %s", string(failedOut)))
+	// Check for failed login attempts (Debian/Ubuntu: auth.log, RHEL: secure)
+	authLog := ""
+	for _, candidate := range []string{"/var/log/auth.log", "/var/log/secure"} {
+		if _, err := os.Stat(candidate); err == nil {
+			authLog = candidate
+			break
+		}
+	}
+	if authLog != "" {
+		// authLog is chosen from a fixed list above, not user input.
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("grep 'Failed password' %s 2>/dev/null | wc -l", authLog))
+		failedOut, _ := cmd.Output()
+		output.WriteString(fmt.Sprintf("Failed login attempts (%s): %s", authLog, string(failedOut)))
+	} else {
+		output.WriteString("Failed login attempts: auth log not found\n")
+	}
 
 	// Check for SUID files
-	cmd = exec.Command("find", "/", "-type", "f", "-perm", "-4000", "2>/dev/null")
-	suidOut, _ := cmd.CombinedOutput()
-	suidCount := len(strings.Split(strings.TrimSpace(string(suidOut)), "\n"))
+	cmd = exec.Command("find", "/", "-type", "f", "-perm", "-4000")
+	suidOut, _ := cmd.Output() // PermissionError noise on stderr is expected
+	suidCount := 0
+	trimmed := strings.TrimSpace(string(suidOut))
+	if trimmed != "" {
+		suidCount = len(strings.Split(trimmed, "\n"))
+	}
 	output.WriteString(fmt.Sprintf("SUID files found: %d\n", suidCount))
 
 	// Check firewall status

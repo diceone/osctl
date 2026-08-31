@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -69,15 +70,35 @@ func runAPI() {
 	if port == "" {
 		port = "12000"
 	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil || portNum < 1 || portNum > 65535 {
+		log.Fatalf("Invalid OSCTL_PORT %q: must be an integer between 1 and 65535", port)
+	}
+
+	if os.Getenv("OSCTL_PASSWORD") == "" {
+		log.Printf("WARNING: OSCTL_PASSWORD is not set; the API will accept the default credentials (admin/password). Set OSCTL_USERNAME/OSCTL_PASSWORD to secure the API.")
+	}
 
 	// Protected endpoints with basic auth
-	http.Handle("/", basicAuth(http.HandlerFunc(handleRequest)))
+	mux := http.NewServeMux()
+	mux.Handle("/", basicAuth(http.HandlerFunc(handleRequest)))
 
 	// Public metrics endpoint
-	http.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
 
-	addr := fmt.Sprintf(":%s", port)
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		// Long-running commands (e.g. package updates) return output only
+		// when the command finishes, so allow generous write time.
+		WriteTimeout:   300 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
 	log.Printf("Server is listening on port %s...", port)
 	log.Printf("Metrics endpoint available at http://localhost:%s/metrics", port)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Fatal(server.ListenAndServe())
 }
