@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /osctl \
     process.go extended_metrics.go health.go cron.go security.go maintenance.go
 
 # Runtime stage: minimal image with just the binary.
-FROM alpine:3.20
+FROM alpine:3.24
 
 COPY --from=builder /osctl /usr/local/bin/osctl
 
