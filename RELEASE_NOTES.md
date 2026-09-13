@@ -1,3 +1,44 @@
+# Release Notes v0.3.4
+
+> Per-version notes below. The full release history is kept in [CHANGELOG.md](CHANGELOG.md).
+
+## 🔍 Diagnostics
+
+Five new read-only diagnostic commands, all available as CLI commands and
+API routes (`/failed`, `/ports`, `/hwinfo`, `/timesync`, `/report`, also
+under `/v1/`):
+
+- **`failed`** — list failed systemd units, with the `osctl_failed_units`
+  gauge for Prometheus alerting.
+- **`ports`** — listening TCP ports with their owning processes. Uses
+  `ss -tlnp` with a `netstat -tlnp` fallback. Exposes
+  `osctl_listening_port{port,process}`.
+- **`hwinfo`** — PCI devices (`lspci`), USB devices (`lsusb`) and loaded
+  kernel modules (`lsmod`); missing tools are noted instead of failing.
+- **`timesync`** — clock synchronization status via `timedatectl`, with a
+  `chronyc tracking` fallback. Exposes the `osctl_time_synced` gauge.
+- **`report`** — one-shot JSON snapshot of all 17 read-only diagnostics
+  (host, osctl version, per-section outputs) — handy for cron jobs,
+  monitoring pipelines and support tickets.
+
+Unit tests cover all new parsers and report generation.
+
+## 📦 Installation
+
+```bash
+# Debian/Ubuntu
+wget https://github.com/diceone/osctl/releases/download/v0.3.4/osctl_0.3.4_amd64.deb
+sudo apt install ./osctl_0.3.4_amd64.deb
+sudo systemctl restart osctl
+
+# RHEL/Fedora/SUSE
+sudo rpm -Uvh https://github.com/diceone/osctl/releases/download/v0.3.4/osctl_0.3.4_amd64.rpm
+
+# Or download the binary for your platform from the release page
+```
+
+---
+
 # Release Notes v0.3.3
 
 > Per-version notes below. The full release history is kept in [CHANGELOG.md](CHANGELOG.md).
