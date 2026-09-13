@@ -1,77 +1,76 @@
-Certainly! Here's a `systemd` unit file to run the `osctl` API as a service.
+# Running osctl as a systemd Service
 
-### `osctl.service`
+osctl ships a systemd unit file in [`osctl.service`](osctl.service) and the
+deb/rpm packages published with each release install it automatically.
 
-### Instructions to Set Up the `osctl` API Service
+## Option 1: Install a package (recommended)
 
-1. **Create the `osctl` binary**:
-   Make sure you have built the `osctl` binary and placed it in `/root/osctl` (or adjust the paths accordingly).
+```bash
+# Debian/Ubuntu
+sudo apt install ./osctl_<version>_amd64.deb
+
+# RHEL/CentOS/Fedora/SUSE
+sudo rpm -i osctl_<version>_amd64.rpm
+```
+
+The package installs the binary to `/usr/bin/osctl` and the unit file to
+`/lib/systemd/system/osctl.service`. Configure credentials via
+[environment variables](../README.md#configuration) or a config file
+(`OSCTL_CONFIG`), then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now osctl
+```
+
+## Option 2: Manual setup
+
+1. **Build the binary** (all Go files live in one package):
 
    ```bash
-   cd /path/to/osctl
-   go build -o osctl osctl.go
-   mv osctl /root/osctl
+   git clone https://github.com/diceone/osctl.git
+   cd osctl
+   go build -o osctl .
+   sudo mv osctl /usr/local/bin/osctl
    ```
 
-2. **Create the systemd service file**:
-   Create a new file at `/etc/systemd/system/osctl.service` and copy the unit file content above into it.
+2. **Install the unit file** from this directory:
 
    ```bash
-   sudo nano /etc/systemd/system/osctl.service
-   ```
-
-   Paste the content:
-
-   ```ini
-   [Unit]
-   Description=osctl API Service
-   After=network.target
-
-   [Service]
-   Type=simple
-   User=root
-   WorkingDirectory=/usr/local/bin/
-   ExecStart=/usr/local/bin/osctl api -username admin -password admin
-   Restart=on-failure
-   RestartSec=10
-   StandardOutput=syslog
-   StandardError=syslog
-   SyslogIdentifier=osctl
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-3. **Reload systemd to recognize the new service**:
-   ```bash
+   sudo cp systemd/osctl.service /etc/systemd/system/osctl.service
    sudo systemctl daemon-reload
    ```
 
-4. **Enable the service to start on boot**:
-   ```bash
-   sudo systemctl enable osctl
+   The unit file starts `/usr/bin/osctl api` as root on port 12000 (the same
+   path the deb/rpm packages use). Adjust `ExecStart` if you installed the
+   binary elsewhere.
+
+3. **Configure credentials** — the server reads `OSCTL_PORT`, `OSCTL_USERNAME`,
+   `OSCTL_PASSWORD`, `OSCTL_API_TOKEN` and other variables. Add an
+   `EnvironmentFile=` line to the `[Service]` section, e.g.:
+
+   ```ini
+   EnvironmentFile=/etc/osctl/osctl.env
    ```
 
-5. **Start the service**:
+4. **Enable and start**:
+
    ```bash
-   sudo systemctl start osctl
+   sudo systemctl enable --now osctl
    ```
 
-6. **Check the status of the service**:
+5. **Verify**:
+
    ```bash
    sudo systemctl status osctl
+   curl -u admin:password http://localhost:12000/health
    ```
 
-   You should see output indicating that the service is running.
+## Logging
 
-### Logging
-
-The `StandardOutput` and `StandardError` directives in the service file direct the output and error logs to the system log. You can view the logs using `journalctl`:
+The unit directs stdout/stderr to the system log, so osctl API logs are
+viewable via journalctl:
 
 ```bash
 sudo journalctl -u osctl -f
 ```
-
-This will display the logs for the `osctl` service in real-time.
-
-By following these steps, you can set up `osctl` to run as a service using `systemd`, ensuring it starts automatically on boot and can be managed using standard `systemd` commands.

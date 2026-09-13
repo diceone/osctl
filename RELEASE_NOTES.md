@@ -1,3 +1,59 @@
+# Release Notes v0.3.2
+
+## 🚀 New Commands
+
+All of these work in the CLI and through the API (also under the `/v1/` prefix):
+
+- **`updates`**: List available package updates without installing them (apt/dnf/yum/zypper)
+- **`logs <unit> [lines]`**: Show recent journal entries for a systemd unit (default 50, max 10000)
+- **`dockerstats`**: Per-container CPU and memory usage with Prometheus gauges (`osctl_docker_cpu_percent`, `osctl_docker_mem_bytes`)
+- **`sensors`**: Temperatures and fan speeds from `/sys/class/hwmon` with gauges (`osctl_sensor_temp_celsius`, `osctl_sensor_fan_rpm`)
+- **`boot`**: Boot time, slowest units and the critical chain (systemd-analyze)
+- **`certs [path|host:port ...]`**: TLS certificate expiry check — scans common system locations by default; reports OK / EXPIRING SOON (< 30 days) / EXPIRED with a gauge (`osctl_cert_expiry_timestamp_seconds`)
+- **`watch [--interval SECONDS] <command>`**: Re-run a command on an interval (default 60 s) and POST to `OSCTL_WEBHOOK_URL` when the output changes
+- **`completion [bash|zsh|fish]`**: Shell completion scripts with install hints
+
+## 🛡️ Security Audit Extensions
+
+- **`audit sysctl`**: Kernel hardening check (ASLR, kptr_restrict, dmesg_restrict, hardlink/symlink protection, suid_dumpable, reverse path filtering, ICMP redirects, ip_forward) with PASS/WARN/INFO per setting and `osctl_sysctl_compliance` gauges
+- **`audit mac`**: SELinux (getenforce / `/sys/fs/selinux/enforce`) and AppArmor (kernel parameter + `aa-status`) status
+
+## 🌐 API & Packaging
+
+- **Live OpenAPI 3.0.3 document** at `/openapi.json` (no auth) — also checked in at [`docs/openapi.yaml`](docs/openapi.yaml)
+- **Versioned `/v1/` route prefix** (e.g. `/v1/ram`) so clients can pin to a stable API path
+- **`OSCTL_METRICS_AUTH`**: Require authentication on `/metrics` when set (e.g. `1`)
+- **deb/rpm packages** now published by GoReleaser for amd64 and arm64, including the systemd service file
+- The `logs` command returns a usage error (HTTP 400) instead of a server error when no unit is given
+
+## 📦 Installation
+
+```bash
+# Debian/Ubuntu
+wget https://github.com/diceone/osctl/releases/download/v0.3.2/osctl_0.3.2_amd64.deb
+sudo apt install ./osctl_0.3.2_amd64.deb
+
+# RHEL/CentOS/Fedora/SUSE
+wget https://github.com/diceone/osctl/releases/download/v0.3.2/osctl_0.3.2_amd64.rpm
+sudo rpm -i osctl_0.3.2_amd64.rpm
+
+# Or download the binary
+wget https://github.com/diceone/osctl/releases/download/v0.3.2/osctl_0.3.2_linux_amd64.tar.gz
+tar xzf osctl_0.3.2_linux_amd64.tar.gz
+chmod +x osctl
+sudo mv osctl /usr/local/bin/osctl
+
+# Or build from source
+git clone https://github.com/diceone/osctl.git
+cd osctl
+git checkout v0.3.2
+go build -o osctl .
+```
+
+Full Changelog: https://github.com/diceone/osctl/compare/v0.3.1...v0.3.2
+
+---
+
 # Release Notes v0.3.1
 
 ## 🔒 Better Privilege Reporting (issue #26)

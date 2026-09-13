@@ -368,6 +368,62 @@ Security audit:
 ./osctl audit summary
 ./osctl audit ports
 ./osctl audit ssh
+./osctl audit sysctl
+./osctl audit mac
+```
+
+List available package updates (without installing):
+
+```bash
+./osctl updates
+```
+
+Show journal entries for a service:
+
+```bash
+./osctl logs nginx 100
+```
+
+Show per-container Docker stats:
+
+```bash
+./osctl dockerstats
+```
+
+Show hardware sensors and boot analysis:
+
+```bash
+./osctl sensors
+./osctl boot
+```
+
+Check TLS certificate expiry (system locations by default, or explicit targets):
+
+```bash
+./osctl certs
+./osctl certs /etc/letsencrypt/live/example.com/fullchain.pem
+./osctl certs example.com:443
+```
+
+Watch a command on an interval (webhooks on output change):
+
+```bash
+export OSCTL_WEBHOOK_URL=https://hooks.example.com/osctl
+./osctl watch --interval 30 health
+```
+
+Install shell completions:
+
+```bash
+./osctl completion bash | sudo tee /etc/bash_completion.d/osctl
+```
+
+Query the same information through the API:
+
+```bash
+curl -u admin:password http://localhost:12000/v1/ram
+curl -u admin:password "http://localhost:12000/logs?unit=nginx&lines=100"
+curl http://localhost:12000/openapi.json
 ```
 
 Manage cron jobs:
@@ -407,9 +463,9 @@ When deploying `osctl` in production, follow these security best practices:
    - Restricting network access via firewall rules
 
 3. **Metrics endpoint**: The `/metrics` endpoint is public by default for Prometheus scraping. To secure it:
-   - Use firewall rules to restrict access to your Prometheus server
-   - Consider implementing IP whitelisting
-   - Place behind a reverse proxy with authentication
+   - Set `OSCTL_METRICS_AUTH=1` to require authentication (supported natively)
+   - Or use firewall rules to restrict access to your Prometheus server
+   - Or place behind a reverse proxy with authentication
 
 4. **Input validation**: The service management commands include validation to prevent command injection, but always:
    - Sanitize inputs when integrating with other systems

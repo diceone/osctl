@@ -5,8 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/osctl
-ExecStart=/root/osctl api
+ExecStart=/usr/bin/osctl api
 Restart=on-failure
 RestartSec=10
 StandardOutput=syslog
