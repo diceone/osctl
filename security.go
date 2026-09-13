@@ -1,11 +1,32 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 )
+
+// rootHint tells the user how to gain the privileges a command needs.
+const rootHint = "Hint: this command requires root privileges. Try running it with sudo."
+
+// permissionHint returns rootHint when the error (or captured command output)
+// indicates a permission problem and the process is not running as root.
+func permissionHint(err error, output string) string {
+	if err == nil || os.Geteuid() == 0 {
+		return ""
+	}
+	msg := strings.ToLower(fmt.Sprint(err) + " " + output)
+	if errors.Is(err, os.ErrPermission) ||
+		strings.Contains(msg, "permission denied") ||
+		strings.Contains(msg, "access denied") ||
+		strings.Contains(msg, "operation not permitted") ||
+		strings.Contains(msg, "authentication required") {
+		return rootHint
+	}
+	return ""
+}
 
 // getOpenPorts scans for open listening ports
 func getOpenPorts() string {
@@ -35,30 +56,52 @@ func checkSuspiciousFiles() string {
 	criticalDirs := []string{"/etc", "/usr/bin", "/usr/local/bin", "/bin", "/sbin"}
 
 	output.WriteString("World-writable files in critical directories:\n")
+	found := false
+	incomplete := false
 	for _, dir := range criticalDirs {
 		cmd := exec.Command("find", dir, "-type", "f", "-perm", "-002", "-ls")
 		out, err := cmd.Output() // stderr discarded, permission errors are expected
-		if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-			output.WriteString(fmt.Sprintf("\nIn %s:\n", dir))
-			output.WriteString(string(out))
+		if err != nil {
+			// find exits non-zero when it cannot read every directory, so
+			// results are partial rather than a clean "nothing found".
+			incomplete = true
 		}
+		if listing := strings.TrimSpace(string(out)); listing != "" {
+			found = true
+			output.WriteString(fmt.Sprintf("\nIn %s:\n%s\n", dir, listing))
+		}
+	}
+	if !found {
+		if incomplete {
+			output.WriteString("(none found; scan incomplete — permission denied on some directories. Try running with sudo)\n")
+		} else {
+			output.WriteString("(none found)\n")
+		}
+	} else if incomplete {
+		output.WriteString("\nNote: scan incomplete — permission denied on some directories. Try running with sudo for a full scan.\n")
 	}
 
 	// Check for SUID/SGID files
 	output.WriteString("\n\nSUID/SGID files (may be security risk):\n")
 	cmd := exec.Command("find", "/", "-type", "f", "(", "-perm", "-4000", "-o", "-perm", "-2000", ")", "-ls")
 	out, err := cmd.Output() // PermissionError noise on stderr is expected
-	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-		lines := strings.Split(string(out), "\n")
+	scanIncomplete := err != nil
+	if listing := strings.TrimSpace(string(out)); listing != "" {
+		lines := strings.Split(listing, "\n")
 		// Limit output to first 50 lines
 		if len(lines) > 50 {
 			output.WriteString(strings.Join(lines[:50], "\n"))
 			output.WriteString(fmt.Sprintf("\n... (%d more files)", len(lines)-50))
 		} else {
-			output.WriteString(string(out))
+			output.WriteString(listing + "\n")
 		}
+		if scanIncomplete {
+			output.WriteString("\nNote: scan incomplete — permission denied on some directories. Try running with sudo for a full scan.\n")
+		}
+	} else if scanIncomplete {
+		output.WriteString("(none found; scan incomplete — permission denied on some directories. Try running with sudo)\n")
 	} else {
-		output.WriteString("(none found or cannot scan)\n")
+		output.WriteString("(none found)\n")
 	}
 
 	return output.String()
@@ -80,12 +123,16 @@ func checkFilePermissions() string {
 	for file, expectedPerm := range criticalFiles {
 		info, err := os.Stat(file)
 		if err != nil {
-			output.WriteString(fmt.Sprintf("❌ %s: Not found or not accessible\n", file))
+			line := fmt.Sprintf("❌ %s: Not found or not accessible", file)
+			if hint := permissionHint(err, ""); hint != "" {
+				line += " — " + hint
+			}
+			output.WriteString(line + "\n")
 			continue
 		}
 
 		mode := info.Mode().Perm()
-		output.WriteString(fmt.Sprintf("📄 %s: %04o (expected: %s)\n", file, mode, expectedPerm))
+		output.WriteString(fmt.Sprintf("📄 %s: %03o (expected: %s)\n", file, mode, expectedPerm))
 	}
 
 	return output.String()
@@ -96,8 +143,8 @@ func checkUnusedUsers() string {
 	var output strings.Builder
 	output.WriteString("User Account Audit:\n\n")
 
-	// Get list of users with login shells
-	cmd := exec.Command("sh", "-c", "awk -F: '$7 !~ /nologin|false/ {print $1}' /etc/passwd")
+	// Get list of users with login shells, along with their UIDs
+	cmd := exec.Command("sh", "-c", `awk -F: '$7 !~ /nologin|false/ {print $1 ":" $3}' /etc/passwd`)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("Failed to get user list. Error: %v", err)
@@ -106,16 +153,23 @@ func checkUnusedUsers() string {
 	users := strings.Split(strings.TrimSpace(string(out)), "\n")
 	output.WriteString(fmt.Sprintf("Users with login shells: %d\n\n", len(users)))
 
-	for _, user := range users {
-		if user == "" {
+	for _, entry := range users {
+		if entry == "" {
 			continue
 		}
 
+		name, uid := entry, ""
+		if idx := strings.LastIndex(entry, ":"); idx >= 0 {
+			name, uid = entry[:idx], entry[idx+1:]
+		}
+
+		output.WriteString(fmt.Sprintf("User: %s (uid: %s)\n", name, uid))
+
 		// Check last login
-		cmd := exec.Command("lastlog", "-u", user)
+		cmd := exec.Command("lastlog", "-u", name)
 		lastOut, err := cmd.CombinedOutput()
 		if err == nil {
-			output.WriteString(fmt.Sprintf("User: %s\n%s\n", user, string(lastOut)))
+			output.WriteString(string(lastOut) + "\n")
 		}
 	}
 
@@ -127,13 +181,15 @@ func getSecurityAuditSummary() string {
 	var output strings.Builder
 	output.WriteString("=== SECURITY AUDIT SUMMARY ===\n\n")
 
-	// Count open ports
+	// Ports
 	cmd := exec.Command("ss", "-tulpn")
 	portOut, _ := cmd.Output()
 	portCount := strings.Count(string(portOut), "LISTEN")
-	output.WriteString(fmt.Sprintf("Open listening ports: %d\n", portCount))
+	output.WriteString("Ports:\n")
+	output.WriteString(fmt.Sprintf("  Open listening ports: %d\n", portCount))
 
-	// Check for failed login attempts (Debian/Ubuntu: auth.log, RHEL: secure)
+	// Users: failed login attempts (Debian/Ubuntu: auth.log, RHEL: secure)
+	output.WriteString("\nUsers:\n")
 	authLog := ""
 	for _, candidate := range []string{"/var/log/auth.log", "/var/log/secure"} {
 		if _, err := os.Stat(candidate); err == nil {
@@ -141,16 +197,24 @@ func getSecurityAuditSummary() string {
 			break
 		}
 	}
-	if authLog != "" {
+	if authLog == "" {
+		output.WriteString("  Failed login attempts: auth log not found\n")
+	} else if f, err := os.Open(authLog); err != nil {
+		// An unreadable log would silently report 0 failed attempts.
+		output.WriteString(fmt.Sprintf("  Failed login attempts (%s): unreadable (%v)\n", authLog, err))
+		if hint := permissionHint(err, ""); hint != "" {
+			output.WriteString("  " + hint + "\n")
+		}
+	} else {
+		f.Close()
 		// authLog is chosen from a fixed list above, not user input.
 		cmd = exec.Command("sh", "-c", fmt.Sprintf("grep 'Failed password' %s 2>/dev/null | wc -l", authLog))
 		failedOut, _ := cmd.Output()
-		output.WriteString(fmt.Sprintf("Failed login attempts (%s): %s", authLog, string(failedOut)))
-	} else {
-		output.WriteString("Failed login attempts: auth log not found\n")
+		output.WriteString(fmt.Sprintf("  Failed login attempts (%s): %s", authLog, string(failedOut)))
 	}
 
-	// Check for SUID files
+	// Files: SUID files
+	output.WriteString("\nFiles:\n")
 	cmd = exec.Command("find", "/", "-type", "f", "-perm", "-4000")
 	suidOut, _ := cmd.Output() // PermissionError noise on stderr is expected
 	suidCount := 0
@@ -158,16 +222,17 @@ func getSecurityAuditSummary() string {
 	if trimmed != "" {
 		suidCount = len(strings.Split(trimmed, "\n"))
 	}
-	output.WriteString(fmt.Sprintf("SUID files found: %d\n", suidCount))
+	output.WriteString(fmt.Sprintf("  SUID files found: %d\n", suidCount))
 
-	// Check firewall status
+	// System: firewall, SELinux, package updates
+	output.WriteString("\nSystem:\n")
 	cmd = exec.Command("systemctl", "is-active", "firewalld")
 	firewallOut, _ := cmd.CombinedOutput()
 	firewallStatus := strings.TrimSpace(string(firewallOut))
 	if firewallStatus == "active" {
-		output.WriteString("✅ Firewall: Active\n")
+		output.WriteString("  ✅ Firewall: Active\n")
 	} else {
-		output.WriteString("⚠️  Firewall: Inactive or not available\n")
+		output.WriteString("  ⚠️  Firewall: Inactive or not available\n")
 	}
 
 	// Check SELinux status
@@ -175,25 +240,24 @@ func getSecurityAuditSummary() string {
 	selinuxOut, _ := cmd.CombinedOutput()
 	selinuxStatus := strings.TrimSpace(string(selinuxOut))
 	if selinuxStatus == "Enforcing" {
-		output.WriteString("✅ SELinux: Enforcing\n")
+		output.WriteString("  ✅ SELinux: Enforcing\n")
 	} else if selinuxStatus == "Permissive" {
-		output.WriteString("⚠️  SELinux: Permissive\n")
+		output.WriteString("  ⚠️  SELinux: Permissive\n")
 	} else {
-		output.WriteString("❌ SELinux: Disabled or not available\n")
+		output.WriteString("  ❌ SELinux: Disabled or not available\n")
 	}
 
 	// Check for available updates
-	output.WriteString("\n")
 	if _, err := os.Stat("/etc/redhat-release"); err == nil {
 		cmd = exec.Command("yum", "check-update", "--quiet")
 		updateOut, _ := cmd.CombinedOutput()
 		updateCount := len(strings.Split(strings.TrimSpace(string(updateOut)), "\n"))
-		output.WriteString(fmt.Sprintf("Available package updates: ~%d\n", updateCount))
+		output.WriteString(fmt.Sprintf("  Available package updates: ~%d\n", updateCount))
 	} else if _, err := os.Stat("/etc/debian_version"); err == nil {
 		cmd = exec.Command("apt", "list", "--upgradable")
 		updateOut, _ := cmd.CombinedOutput()
 		updateCount := strings.Count(string(updateOut), "[upgradable")
-		output.WriteString(fmt.Sprintf("Available package updates: %d\n", updateCount))
+		output.WriteString(fmt.Sprintf("  Available package updates: %d\n", updateCount))
 	}
 
 	return output.String()
@@ -207,7 +271,11 @@ func checkSSHSecurity() string {
 	sshConfigFile := "/etc/ssh/sshd_config"
 	content, err := os.ReadFile(sshConfigFile)
 	if err != nil {
-		return fmt.Sprintf("Failed to read SSH config. Error: %v", err)
+		msg := fmt.Sprintf("Failed to read SSH config. Error: %v", err)
+		if hint := permissionHint(err, ""); hint != "" {
+			msg += "\n" + hint
+		}
+		return msg
 	}
 
 	config := string(content)
@@ -220,6 +288,8 @@ func checkSSHSecurity() string {
 		"PermitEmptyPasswords":   "no",
 		"X11Forwarding":          "no",
 	}
+
+	output.WriteString("Legend: ✅ explicitly set to the recommended value, ⚠️ explicitly set to another value, ❓ not explicitly set (the sshd default applies)\n\n")
 
 	for setting, recommended := range checks {
 		found := false
@@ -243,7 +313,7 @@ func checkSSHSecurity() string {
 			}
 		}
 		if !found {
-			output.WriteString(fmt.Sprintf("❓ %s: not explicitly set (recommended: %s)\n", setting, recommended))
+			output.WriteString(fmt.Sprintf("❓ %s: not explicitly set — the sshd default applies (recommended: %s)\n", setting, recommended))
 		}
 	}
 

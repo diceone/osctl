@@ -113,6 +113,7 @@ osctl [command]
 - `firewallallow <port>[/<proto>]`: Allow a port (ufw or firewalld)
 - `firewalldeny <port>[/<proto>]`: Deny/remove a port rule
 - `version`: Show osctl version
+- `help`: Show this help message
 - `api`: Run as an API server (default port: 12000)
 - `--json`: Prefix for any command to emit the result as JSON (`osctl --json <command>`)
 - `--help`: Show this help message

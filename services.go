@@ -30,6 +30,11 @@ func manageService(action, service string) string {
 		return "Invalid service name: contains forbidden characters"
 	}
 
+	// Mutations need root; only the read-only status query works unprivileged.
+	if action != "status" && os.Geteuid() != 0 {
+		return fmt.Sprintf("Failed to %s service %s: this action requires root privileges. Try running with sudo.", action, service)
+	}
+
 	cmd := exec.Command("systemctl", action, service)
 
 	// status is a read-only query: always report its output so callers
@@ -42,9 +47,13 @@ func manageService(action, service string) string {
 		return string(out)
 	}
 
-	err := cmd.Run()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("Failed to %s service %s. Error: %v", action, service, err)
+		msg := fmt.Sprintf("Failed to %s service %s. Error: %v", action, service, err)
+		if hint := permissionHint(err, string(out)); hint != "" {
+			msg += "\n" + hint
+		}
+		return msg
 	}
 	pastTense := map[string]string{
 		"start":   "started",
@@ -67,6 +76,9 @@ func runPackageCmd(cmd *exec.Cmd) string {
 }
 
 func shutdownSystem() string {
+	if os.Geteuid() != 0 {
+		return "Failed to shutdown the system: this command requires root privileges. Try running with sudo."
+	}
 	cmd := exec.Command("shutdown", "now")
 	err := cmd.Run()
 	if err != nil {
@@ -76,6 +88,9 @@ func shutdownSystem() string {
 }
 
 func rebootSystem() string {
+	if os.Geteuid() != 0 {
+		return "Failed to reboot the system: this command requires root privileges. Try running with sudo."
+	}
 	cmd := exec.Command("reboot")
 	err := cmd.Run()
 	if err != nil {
@@ -86,6 +101,10 @@ func rebootSystem() string {
 
 func updatePackages() string {
 	var cmd *exec.Cmd
+
+	if os.Geteuid() != 0 {
+		return "Failed to update packages: this command requires root privileges. Try running with sudo."
+	}
 
 	// Check for /etc/os-release first (modern standard)
 	if data, err := os.ReadFile("/etc/os-release"); err == nil {

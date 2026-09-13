@@ -18,7 +18,7 @@ func main() {
 		args = args[1:]
 	}
 
-	if len(args) < 1 || args[0] == "--help" || args[0] == "-h" {
+	if len(args) < 1 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
 		printHelp()
 		return
 	}

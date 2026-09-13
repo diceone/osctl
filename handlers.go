@@ -327,6 +327,7 @@ Commands:
   maintenance     Maintenance mode and system operations (status, enable, disable, check-services, restart-failed, sync-time, clear-cache)
   api             Run as an API server (default port: 12000)
   version         Show osctl version
+  help            Show this help message
   --json          Emit any command result as JSON: osctl --json <command>
   --help          Show this help message
 

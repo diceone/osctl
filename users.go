@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -46,6 +47,9 @@ func addUser(name string) string {
 	if err := validateUsername(name); err != nil {
 		return "Invalid username: " + err.Error()
 	}
+	if os.Geteuid() != 0 {
+		return fmt.Sprintf("Failed to create user %s: this command requires root privileges. Try running with sudo.", name)
+	}
 
 	out, err := exec.Command("useradd", "-m", name).CombinedOutput()
 	if err != nil {
@@ -71,6 +75,9 @@ func deleteUser(name string) string {
 	}
 	if protectedUsers[name] {
 		return fmt.Sprintf("Refusing to delete protected account %q", name)
+	}
+	if os.Geteuid() != 0 {
+		return fmt.Sprintf("Failed to delete user %s: this command requires root privileges. Try running with sudo.", name)
 	}
 
 	out, err := exec.Command("userdel", "-r", name).CombinedOutput()

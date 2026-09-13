@@ -140,7 +140,11 @@ func getLastJournalErrors() string {
 	cmd := exec.Command("journalctl", "-p", "err", "-n", "10", "--no-pager")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("Failed to get journal errors. Error: %v", err)
+		msg := fmt.Sprintf("Failed to get journal errors. Error: %v", err)
+		if hint := permissionHint(err, string(out)); hint != "" {
+			msg += "\n" + hint
+		}
+		return msg
 	}
 	return string(out)
 }
