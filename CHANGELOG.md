@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `failed` — list failed systemd units with `osctl_failed_units` gauge
+- `ports` — listening TCP ports with owning processes (`ss`, falls back to `netstat`), `osctl_listening_port{port,process}` gauge
+- `hwinfo` — PCI devices, USB devices and loaded kernel modules (lspci/lsusb/lsmod)
+- `timesync` — clock synchronization status via `timedatectl` (falls back to `chronyc tracking`), `osctl_time_synced` gauge
+- `report` — one-shot JSON snapshot of all 17 read-only diagnostics for cron jobs and log pipelines
+
 ## [0.3.3] — 2026-09-13
 
 ### Fixed

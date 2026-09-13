@@ -96,6 +96,25 @@ var (
 		},
 		[]string{"check"},
 	)
+	failedUnits = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "osctl_failed_units",
+			Help: "Number of failed systemd units",
+		},
+	)
+	timeSynced = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "osctl_time_synced",
+			Help: "1 when the system clock is synchronized via NTP",
+		},
+	)
+	listeningPort = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_listening_port",
+			Help: "1 for each currently listening TCP port",
+		},
+		[]string{"port", "process"},
+	)
 )
 
 func init() {
@@ -111,6 +130,9 @@ func init() {
 	prometheus.MustRegister(sensorFanRPM)
 	prometheus.MustRegister(certExpirySeconds)
 	prometheus.MustRegister(sysctlCompliance)
+	prometheus.MustRegister(failedUnits)
+	prometheus.MustRegister(timeSynced)
+	prometheus.MustRegister(listeningPort)
 }
 
 func runAPI() {

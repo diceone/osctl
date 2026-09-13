@@ -44,6 +44,7 @@
 - **Read-only package update list** (`updates`) and **service journal logs** (`logs <unit> [lines]`)
 - **Docker container stats** (`dockerstats`) with Prometheus gauges
 - **Hardware sensors** (`sensors`), **boot analysis** (`boot`), **TLS certificate expiry** (`certs`)
+- **Diagnostics**: failed units (`failed`), listening ports (`ports`), hardware info (`hwinfo`), time sync (`timesync`), full JSON snapshot (`report`)
 - **Watch mode** (`watch`) re-running a command on an interval with change webhooks
 - **Extended security audit**: kernel hardening (`audit sysctl`) and SELinux/AppArmor status (`audit mac`)
 - **Shell completions** (bash/zsh/fish) and **deb/rpm packages** via GoReleaser
@@ -127,6 +128,11 @@ osctl [command]
 - `boot`: Show boot time, slowest units and the critical chain (systemd-analyze)
 - `sensors`: Show temperatures and fan speeds from `/sys/class/hwmon`
 - `certs [path|host:port ...]`: Check TLS certificate expiry (scans common system locations by default)
+- `failed`: List failed systemd units (with `osctl_failed_units` gauge)
+- `ports`: List listening TCP ports and their owning processes (with `osctl_listening_port` gauge)
+- `hwinfo`: Show PCI devices, USB devices and loaded kernel modules
+- `timesync`: Show clock synchronization status (timedatectl, falls back to chrony)
+- `report`: One-shot JSON snapshot of all read-only diagnostics
 - `watch [--interval SECONDS] <command>`: Re-run a command on an interval (default 60) and POST to `OSCTL_WEBHOOK_URL` when the output changes
 - `completion [bash|zsh|fish]`: Print a shell completion script
 - `version`: Show osctl version
@@ -403,6 +409,16 @@ Check TLS certificate expiry (system locations by default, or explicit targets):
 ./osctl certs
 ./osctl certs /etc/letsencrypt/live/example.com/fullchain.pem
 ./osctl certs example.com:443
+```
+
+Run quick diagnostics (also available as API routes `/failed`, `/ports`, `/hwinfo`, `/timesync`, `/report`):
+
+```bash
+./osctl failed
+./osctl ports
+./osctl hwinfo
+./osctl timesync
+curl -u admin:password http://localhost:12000/report | jq .sections.failed_units
 ```
 
 Watch a command on an interval (webhooks on output change):

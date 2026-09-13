@@ -433,6 +433,48 @@ paths:
           description: OK
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /failed:
+    get:
+      summary: List failed systemd units
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /ports:
+    get:
+      summary: List listening TCP ports and their owning processes
+      description: Uses `ss -tlnp` with a `netstat -tlnp` fallback.
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /hwinfo:
+    get:
+      summary: Hardware information (PCI devices, USB devices, kernel modules)
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /timesync:
+    get:
+      summary: Clock synchronization status
+      description: Uses `timedatectl` with a `chronyc tracking` fallback.
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /report:
+    get:
+      summary: One-shot JSON snapshot of all read-only diagnostics
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /openapi.json:
     get:
       summary: Live machine-readable OpenAPI description (no authentication)

@@ -114,6 +114,16 @@ func executeCommand(args []string) string {
 		return getBootAnalysis()
 	case "certs":
 		return checkCertificates(args[1:])
+	case "failed":
+		return getFailedUnits()
+	case "ports":
+		return getListeningPorts()
+	case "hwinfo":
+		return getHardwareInfo()
+	case "timesync":
+		return getTimeSyncStatus()
+	case "report":
+		return generateReport()
 	case "completion":
 		if len(args) < 2 {
 			fmt.Println("Usage: osctl completion [bash|zsh|fish]")

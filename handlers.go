@@ -87,6 +87,16 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		} else {
 			result = checkCertificates(nil)
 		}
+	case "failed":
+		result = getFailedUnits()
+	case "ports":
+		result = getListeningPorts()
+	case "hwinfo":
+		result = getHardwareInfo()
+	case "timesync":
+		result = getTimeSyncStatus()
+	case "report":
+		result = generateReport()
 	case "containers":
 		result = listDockerContainers()
 	case "images":
@@ -362,6 +372,11 @@ Commands:
   boot            Show boot time and slowest units (systemd-analyze)
   sensors         Show temperatures and fan speeds from /sys/class/hwmon
   certs           Check TLS certificate expiry: osctl certs [path|host:port ...]
+  failed          List failed systemd units
+  ports           List listening TCP ports with owning process
+  hwinfo          Show hardware inventory (PCI, USB, kernel modules)
+  timesync        Show clock synchronization status
+  report          One-shot JSON snapshot of all read-only checks
   watch           Re-run a command on an interval: osctl watch [--interval SECONDS] <command>
   completion      Generate shell completion script: osctl completion [bash|zsh|fish]
   api             Run as an API server (default port: 12000)
