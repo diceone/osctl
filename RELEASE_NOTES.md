@@ -1,3 +1,45 @@
+# Release Notes v0.3.1
+
+## 🔒 Better Privilege Reporting (issue #26)
+
+Commands that require root now clearly say so instead of only reporting failure:
+
+- **Root pre-checks** for `service start/stop/restart/enable/disable`, `shutdown`, `reboot`, `update`, `useradd`, `userdel`
+- **Permission-error hints** appended for `audit ssh`, `audit files`, `audit summary`, and `errors` when run unprivileged
+- Messages keep the `Failed...` prefix so exit codes and HTTP status mapping are unchanged
+
+## 📖 CLI Improvements
+
+- **`help`**: `osctl help` is now a documented command alongside `--help`
+
+## 🛡️ Security Audit Improvements
+
+- **`audit summary`**: output grouped by category — `Ports:`, `Users:`, `Files:`, `System:` — and an unreadable auth log is reported (with sudo hint) instead of a silent `0`
+- **`audit files`**: distinguishes `(none found)` from incomplete scans caused by permission denied, with a note to re-run with sudo for a full scan
+- **`audit permissions`**: prints three-digit octal notation (`644`) matching the expected values
+- **`audit users`**: lists each user's UID, e.g. `User: root (uid: 0)`
+- **`audit ssh`**: adds a legend for the ✅/⚠️/❓ markers and notes when the sshd default applies
+
+## 📦 Installation
+
+```bash
+# Download binary for your platform
+wget https://github.com/diceone/osctl/releases/download/v0.3.1/osctl_0.3.1_linux_amd64.tar.gz
+tar xzf osctl_0.3.1_linux_amd64.tar.gz
+chmod +x osctl
+sudo mv osctl /usr/local/bin/osctl
+
+# Or build from source
+git clone https://github.com/diceone/osctl.git
+cd osctl
+git checkout v0.3.1
+go build -o osctl .
+```
+
+Full Changelog: https://github.com/diceone/osctl/compare/v0.3.0...v0.3.1
+
+---
+
 # Release Notes v0.0.8
 
 ## 🛠️ New Feature: Maintenance Mode
