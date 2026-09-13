@@ -480,6 +480,10 @@ When deploying `osctl` in production, follow these security best practices:
 
 OS detection uses `/etc/os-release` (modern standard) with fallback to legacy detection files.
 
+## Changelog
+
+All notable changes are documented in [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog format).
+
 ## Contributing
 
 Feel free to submit issues, fork the repository, and send pull requests. For major changes, please open an issue first to discuss what you would like to change.

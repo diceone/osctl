@@ -1,5 +1,7 @@
 # Release Notes v0.3.3
 
+> Per-version notes below. The full release history is kept in [CHANGELOG.md](CHANGELOG.md).
+
 ## 🔧 Packaging Fix
 
 - **systemd service file**: `ExecStart` now points to `/usr/bin/osctl`, the
