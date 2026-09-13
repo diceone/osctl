@@ -4,8 +4,8 @@ info:
   description: >
     Linux system administration HTTP API exposed by `osctl api`.
     Authentication is Basic Auth (OSCTL_USERNAME/OSCTL_PASSWORD) or a Bearer
-    token (OSCTL_API_TOKEN). The /metrics endpoint is public for Prometheus.
-  version: 0.3.0
+    token (OSCTL_API_TOKEN). The /metrics endpoint is public for Prometheus unless OSCTL_METRICS_AUTH is set. All routes are also available under the /v1/ prefix.
+  version: 0.3.2
 servers:
   - url: http://localhost:12000
   - url: https://localhost:12000
@@ -189,10 +189,24 @@ paths:
           description: OK
   /audit:
     get:
-      summary: Security audit summary
+      summary: Security audit
+      description: >
+        action selects the audit: ports, files, permissions, users, ssh,
+        sysctl (kernel hardening), mac (SELinux/AppArmor) or summary.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ports, files, permissions, users, ssh, sysctl, mac, summary]
       responses:
         "200":
           description: OK
+        "400":
+          description: Unknown audit action
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /maintenance:
     get:
       summary: Maintenance mode status
@@ -349,9 +363,87 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
+  /updates:
+    get:
+      summary: List available package updates without installing
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /logs:
+    get:
+      summary: Recent journal entries for a systemd unit
+      parameters:
+        - name: unit
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: lines
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /dockerstats:
+    get:
+      summary: Per-container CPU and memory stats
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /sensors:
+    get:
+      summary: Temperatures and fan speeds from /sys/class/hwmon
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /boot:
+    get:
+      summary: Boot time and slowest units (systemd-analyze)
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /certs:
+    get:
+      summary: TLS certificate expiry check
+      description: >
+        Without a target, common system certificate locations are scanned.
+        A target may be a PEM certificate file or a host:port endpoint.
+      parameters:
+        - name: target
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /openapi.json:
+    get:
+      summary: Live machine-readable OpenAPI description (no authentication)
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.0.3 JSON document
+
   /metrics:
     get:
-      summary: Prometheus metrics (no authentication)
+      summary: Prometheus metrics (public unless OSCTL_METRICS_AUTH is set)
       security: []
       responses:
         "200":

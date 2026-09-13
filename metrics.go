@@ -54,6 +54,48 @@ var (
 		},
 		[]string{"state"},
 	)
+	dockerCPUPercent = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_docker_cpu_percent",
+			Help: "CPU usage percent per Docker container",
+		},
+		[]string{"container"},
+	)
+	dockerMemBytes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_docker_mem_bytes",
+			Help: "Memory usage in bytes per Docker container",
+		},
+		[]string{"container", "type"},
+	)
+	sensorTempCelsius = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_sensor_temp_celsius",
+			Help: "Temperature readings in Celsius from hwmon devices",
+		},
+		[]string{"device", "label"},
+	)
+	sensorFanRPM = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_sensor_fan_rpm",
+			Help: "Fan speed readings in RPM from hwmon devices",
+		},
+		[]string{"device", "label"},
+	)
+	certExpirySeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_cert_expiry_timestamp_seconds",
+			Help: "Unix timestamp of TLS certificate expiry",
+		},
+		[]string{"source"},
+	)
+	sysctlCompliance = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "osctl_sysctl_compliance",
+			Help: "Kernel hardening compliance per sysctl check (1 = pass, 0 = warning)",
+		},
+		[]string{"check"},
+	)
 )
 
 func init() {
@@ -63,6 +105,12 @@ func init() {
 	prometheus.MustRegister(networkIOBytes)
 	prometheus.MustRegister(diskIOBytes)
 	prometheus.MustRegister(processCount)
+	prometheus.MustRegister(dockerCPUPercent)
+	prometheus.MustRegister(dockerMemBytes)
+	prometheus.MustRegister(sensorTempCelsius)
+	prometheus.MustRegister(sensorFanRPM)
+	prometheus.MustRegister(certExpirySeconds)
+	prometheus.MustRegister(sysctlCompliance)
 }
 
 func runAPI() {
@@ -96,8 +144,15 @@ func runAPI() {
 	mux := http.NewServeMux()
 	mux.Handle("/", basicAuth(auditMiddleware(http.HandlerFunc(handleRequest))))
 
-	// Public metrics endpoint
-	mux.Handle("/metrics", promhttp.Handler())
+	// Public OpenAPI document for the API routes.
+	mux.HandleFunc("/openapi.json", serveOpenAPI)
+
+	// Metrics endpoint; auth can be enforced with OSCTL_METRICS_AUTH=1.
+	if envEnabled("OSCTL_METRICS_AUTH") {
+		mux.Handle("/metrics", basicAuth(promhttp.Handler()))
+	} else {
+		mux.Handle("/metrics", promhttp.Handler())
+	}
 
 	server := &http.Server{
 		Addr:              ":" + port,

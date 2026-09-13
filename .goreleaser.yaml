@@ -23,6 +23,22 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+nfpms:
+  - file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    package_name: osctl
+    vendor: diceone
+    homepage: https://github.com/diceone/osctl
+    maintainer: Michael Vogeler <diceone@users.noreply.github.com>
+    description: CLI and HTTP API for Linux system administration with Prometheus metrics.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: systemd/osctl.service
+        dst: /lib/systemd/system/osctl.service
+        type: config
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 

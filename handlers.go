@@ -11,6 +11,12 @@ import (
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 
+	// Versioned routes (/v1/ram) behave identically to unversioned ones so
+	// clients can pin to a stable API prefix.
+	if versioned, ok := strings.CutPrefix(path, "v1/"); ok {
+		path = versioned
+	}
+
 	var result string
 
 	switch path {
@@ -60,6 +66,27 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		result = getFirewalldRules()
 	case "update":
 		result = updatePackages()
+	case "updates":
+		result = listPackageUpdates()
+	case "logs":
+		unit := r.URL.Query().Get("unit")
+		if unit == "" {
+			http.Error(w, "Missing unit parameter", http.StatusBadRequest)
+			return
+		}
+		result = getServiceLogs(unit, r.URL.Query().Get("lines"))
+	case "dockerstats":
+		result = getDockerStats()
+	case "sensors":
+		result = getSensors()
+	case "boot":
+		result = getBootAnalysis()
+	case "certs":
+		if target := r.URL.Query().Get("target"); target != "" {
+			result = checkCertificates([]string{target})
+		} else {
+			result = checkCertificates(nil)
+		}
 	case "containers":
 		result = listDockerContainers()
 	case "images":
@@ -206,10 +233,14 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			result = checkUnusedUsers()
 		case "ssh":
 			result = checkSSHSecurity()
+		case "sysctl":
+			result = checkSysctlHardening()
+		case "mac":
+			result = checkMACFramework()
 		case "summary":
 			result = getSecurityAuditSummary()
 		default:
-			http.Error(w, "Invalid audit action. Valid: ports, files, permissions, users, ssh, summary", http.StatusBadRequest)
+			http.Error(w, "Invalid audit action. Valid: ports, files, permissions, users, ssh, sysctl, mac, summary", http.StatusBadRequest)
 			return
 		}
 	case "cron":
@@ -301,9 +332,11 @@ Commands:
   firewallallow   Allow a port: osctl firewallallow <port>[/<proto>] (ufw or firewalld)
   firewalldeny    Deny/remove a port rule: osctl firewalldeny <port>[/<proto>]
   update          Update OS packages
+  updates         List available package updates without installing
   containers      List all Docker containers
   images          List all Docker images
   dockerlogs      Show last 50 log lines of a container: osctl dockerlogs <container>
+  dockerstats     Show per-container CPU and memory stats
   dockerrestart   Restart a container: osctl dockerrestart <container>
   userinfo        Show user identity and password aging: osctl userinfo <username>
   useradd         Create a user with home directory: osctl useradd <username>
@@ -322,9 +355,15 @@ Commands:
   networkio       Show network I/O statistics
   diskio          Show disk I/O statistics
   procs           Show process count by state
-  audit           Security audit (ports, files, permissions, users, ssh, summary)
+  audit           Security audit (ports, files, permissions, users, ssh, sysctl, mac, summary)
   cron            Cron job management (list, add, remove, next)
   maintenance     Maintenance mode and system operations (status, enable, disable, check-services, restart-failed, sync-time, clear-cache)
+  logs            Show recent journal entries for a unit: osctl logs <unit> [lines]
+  boot            Show boot time and slowest units (systemd-analyze)
+  sensors         Show temperatures and fan speeds from /sys/class/hwmon
+  certs           Check TLS certificate expiry: osctl certs [path|host:port ...]
+  watch           Re-run a command on an interval: osctl watch [--interval SECONDS] <command>
+  completion      Generate shell completion script: osctl completion [bash|zsh|fish]
   api             Run as an API server (default port: 12000)
   version         Show osctl version
   help            Show this help message
@@ -343,5 +382,6 @@ Environment:
   OSCTL_AUDIT_LOG           JSONL request audit log path
   OSCTL_STATE_DIR           Directory for persisted auth-failure state
   OSCTL_WEBHOOK_URL         POST JSON here when health status changes
-  OSCTL_HEALTH_INTERVAL     Seconds between health checks (default 300, min 30)`)
+  OSCTL_HEALTH_INTERVAL     Seconds between health checks (default 300, min 30)
+  OSCTL_METRICS_AUTH        Require auth on /metrics when set (1/true/yes/on)`)
 }

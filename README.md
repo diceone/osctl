@@ -41,6 +41,13 @@
 - **Security audit** (port scan, file permissions, SSH config, suspicious files)
 - **Cron job management** (list, add, remove, next runs)
 - **Maintenance mode** (system maintenance operations, service checks, cache clearing)
+- **Read-only package update list** (`updates`) and **service journal logs** (`logs <unit> [lines]`)
+- **Docker container stats** (`dockerstats`) with Prometheus gauges
+- **Hardware sensors** (`sensors`), **boot analysis** (`boot`), **TLS certificate expiry** (`certs`)
+- **Watch mode** (`watch`) re-running a command on an interval with change webhooks
+- **Extended security audit**: kernel hardening (`audit sysctl`) and SELinux/AppArmor status (`audit mac`)
+- **Shell completions** (bash/zsh/fish) and **deb/rpm packages** via GoReleaser
+- **OpenAPI document** served live at `/openapi.json`, versioned `/v1/` API routes, optional `/metrics` authentication
 - Run as an API server with configurable port and Prometheus metrics endpoint
 
 ## Usage
@@ -64,8 +71,10 @@ osctl [command]
 - `ip`: Show IP addresses of all interfaces
 - `firewall`: Show active firewalld rules
 - `update`: Update OS packages
+- `updates`: List available package updates without installing them
 - `containers`: List all Docker containers
 - `images`: List all Docker images
+- `dockerstats`: Show per-container CPU and memory stats
 - `cpu`: Show CPU usage
 - `load`: Show system load averages
 - `network`: Show network statistics
@@ -90,6 +99,8 @@ osctl [command]
   - `permissions`: Check critical file permissions
   - `users`: List user accounts and last login
   - `ssh`: Audit SSH configuration
+  - `sysctl`: Audit kernel hardening settings (ASLR, kptr_restrict, dump protection, ...)
+  - `mac`: Show SELinux/AppArmor status
   - `summary`: Security audit summary
 - `cron [action]`: Cron job management
   - `list`: List all cron jobs with line numbers
@@ -112,6 +123,12 @@ osctl [command]
 - `userdel <username>`: Delete a user (and home directory)
 - `firewallallow <port>[/<proto>]`: Allow a port (ufw or firewalld)
 - `firewalldeny <port>[/<proto>]`: Deny/remove a port rule
+- `logs <unit> [lines]`: Show recent journal entries for a systemd unit (default 50 lines)
+- `boot`: Show boot time, slowest units and the critical chain (systemd-analyze)
+- `sensors`: Show temperatures and fan speeds from `/sys/class/hwmon`
+- `certs [path|host:port ...]`: Check TLS certificate expiry (scans common system locations by default)
+- `watch [--interval SECONDS] <command>`: Re-run a command on an interval (default 60) and POST to `OSCTL_WEBHOOK_URL` when the output changes
+- `completion [bash|zsh|fish]`: Print a shell completion script
 - `version`: Show osctl version
 - `help`: Show this help message
 - `api`: Run as an API server (default port: 12000)
@@ -180,8 +197,9 @@ Configure the API server using environment variables:
 - `OSCTL_TLS_CERT` / `OSCTL_TLS_KEY`: PEM certificate/key to serve the API over HTTPS
 - `OSCTL_AUDIT_LOG`: Path to a JSONL file where every API request (method, path, status, user, source IP) is logged
 - `OSCTL_STATE_DIR`: Directory for persisted auth-failure state (default: `/var/lib/osctl`)
-- `OSCTL_WEBHOOK_URL`: URL that receives a JSON POST whenever the health status changes
+- `OSCTL_WEBHOOK_URL`: URL that receives a JSON POST whenever the health status changes (also used by `watch` for output changes)
 - `OSCTL_HEALTH_INTERVAL`: Seconds between health checks for the webhook monitor (default: `300`, minimum: `30`)
+- `OSCTL_METRICS_AUTH`: Require authentication on `/metrics` when set (e.g. `1`)
 
 #### Config file
 
@@ -210,7 +228,7 @@ export OSCTL_PASSWORD=securepassword
 ./osctl api
 ```
 
-The API server provides the same functionalities as the CLI commands. Additionally, it includes a **public** Prometheus metrics endpoint at `/metrics` (no authentication required).
+The API server provides the same functionalities as the CLI commands. Additionally, it includes a Prometheus metrics endpoint at `/metrics` (no authentication required unless `OSCTL_METRICS_AUTH` is set) and a public OpenAPI document at `/openapi.json`.
 
 ## Authentication for API
 
@@ -286,14 +304,18 @@ export OSCTL_HEALTH_INTERVAL=60
 
 ### OpenAPI
 
-A machine-readable API description is available in [`docs/openapi.yaml`](docs/openapi.yaml)
-and can be imported into Swagger UI, Postman, or API gateways.
+A machine-readable API description is served live at `/openapi.json` (no
+authentication required) and is also checked into the repository at
+[`docs/openapi.yaml`](docs/openapi.yaml). Either can be imported into Swagger UI,
+Postman, or API gateways. All routes are additionally available under a `/v1/`
+prefix (e.g. `/v1/ram`) so clients can pin to a stable API path.
 
 ### Releases
 
 Releases are built with [GoReleaser](https://goreleaser.com) via GitHub Actions
 (`.github/workflows/release.yml`): pushing a `v*` tag runs the tests and publishes
-Linux binaries (amd64/arm64) plus checksums to the GitHub release. The version is
+Linux binaries (amd64/arm64) plus checksums to the GitHub release, and build
+`deb`/`rpm` packages (including the systemd service file). The version is
 injected from the tag via `-ldflags -X main.buildVersion`.
 
 ## Example Usage

@@ -94,6 +94,34 @@ func executeCommand(args []string) string {
 		return manageFirewallRule("deny", args[1])
 	case "update":
 		return updatePackages()
+	case "updates":
+		return listPackageUpdates()
+	case "logs":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl logs <unit> [lines]")
+			os.Exit(1)
+		}
+		lines := ""
+		if len(args) >= 3 {
+			lines = args[2]
+		}
+		return getServiceLogs(args[1], lines)
+	case "dockerstats":
+		return getDockerStats()
+	case "sensors":
+		return getSensors()
+	case "boot":
+		return getBootAnalysis()
+	case "certs":
+		return checkCertificates(args[1:])
+	case "completion":
+		if len(args) < 2 {
+			fmt.Println("Usage: osctl completion [bash|zsh|fish]")
+			os.Exit(1)
+		}
+		return completionCommand(args[1])
+	case "watch":
+		return runWatch(args[1:])
 	case "containers":
 		return listDockerContainers()
 	case "images":
@@ -209,10 +237,14 @@ func executeCommand(args []string) string {
 			return checkUnusedUsers()
 		case "ssh":
 			return checkSSHSecurity()
+		case "sysctl":
+			return checkSysctlHardening()
+		case "mac":
+			return checkMACFramework()
 		case "summary":
 			return getSecurityAuditSummary()
 		default:
-			fmt.Println("Usage: osctl audit [ports|files|permissions|users|ssh|summary]")
+			fmt.Println("Usage: osctl audit [ports|files|permissions|users|ssh|sysctl|mac|summary]")
 			os.Exit(1)
 		}
 	case "cron":

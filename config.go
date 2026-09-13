@@ -20,6 +20,7 @@ var configKeys = map[string]bool{
 	"OSCTL_STATE_DIR":       true,
 	"OSCTL_WEBHOOK_URL":     true,
 	"OSCTL_HEALTH_INTERVAL": true,
+	"OSCTL_METRICS_AUTH":    true,
 }
 
 // loadConfigFile reads simple KEY=VALUE pairs from path and sets them in the
@@ -65,5 +66,15 @@ func applyConfigFile() {
 			// Not fatal: environment variables still work; surface the reason.
 			fmt.Fprintf(os.Stderr, "osctl: could not read config file %s: %v\n", path, err)
 		}
+	}
+}
+
+// envEnabled reports whether a boolean-style env var is switched on.
+func envEnabled(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
