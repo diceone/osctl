@@ -1,3 +1,36 @@
+# Release Notes v0.3.3
+
+## 🔧 Packaging Fix
+
+- **systemd service file**: `ExecStart` now points to `/usr/bin/osctl`, the
+  path used by the GoReleaser deb/rpm packages (v0.3.2 shipped the service
+  file pointing at `/root/osctl`, which would fail to start after a package
+  install). The obsolete `WorkingDirectory=/root/osctl` was removed.
+- No code changes; the binaries are identical to v0.3.2 apart from the
+  version string.
+
+## 📦 Installation
+
+```bash
+# Debian/Ubuntu
+wget https://github.com/diceone/osctl/releases/download/v0.3.3/osctl_0.3.3_amd64.deb
+sudo apt install ./osctl_0.3.3_amd64.deb
+
+# RHEL/CentOS/Fedora/SUSE
+wget https://github.com/diceone/osctl/releases/download/v0.3.3/osctl_0.3.3_amd64.rpm
+sudo rpm -i osctl_0.3.3_amd64.rpm
+
+# Or download the binary
+wget https://github.com/diceone/osctl/releases/download/v0.3.3/osctl_0.3.3_linux_amd64.tar.gz
+tar xzf osctl_0.3.3_linux_amd64.tar.gz
+chmod +x osctl
+sudo mv osctl /usr/local/bin/osctl
+```
+
+Full Changelog: https://github.com/diceone/osctl/compare/v0.3.2...v0.3.3
+
+---
+
 # Release Notes v0.3.2
 
 ## 🚀 New Commands
