@@ -1,5 +1,5 @@
 # Build stage: compile a static Linux binary for amd64.
-FROM golang:1.23 AS builder
+FROM golang:1.27 AS builder
 
 WORKDIR /src
 
